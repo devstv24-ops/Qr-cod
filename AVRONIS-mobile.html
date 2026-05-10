@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>AVRONIS — Заявка</title>
+<style>
+:root{--bg:#0b0f14;--surface:#111820;--surface2:#1a2230;--border:#2a3a4f;--accent:#3d8ef0;--green:#2ecc71;--red:#e74c3c;--orange:#f39c12;--text:#e8edf3;--text2:#7a8fa6;--radius:12px}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:15px}
+.wrap{max-width:480px;margin:0 auto;padding:16px 14px 40px}
+.logo{text-align:center;padding:24px 0 20px;border-bottom:1px solid var(--border);margin-bottom:20px}
+.logo-icon{font-size:36px;margin-bottom:8px}
+.logo-title{font-size:18px;font-weight:700;letter-spacing:-.3px}
+.logo-sub{font-size:12px;color:var(--text2);margin-top:4px}
+.choice-btn{display:block;width:100%;padding:16px;margin-bottom:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:15px;cursor:pointer;text-align:left;transition:.15s;-webkit-appearance:none}
+.choice-btn:active{background:var(--surface2);transform:scale(.98)}
+.choice-icon{font-size:26px;display:block;margin-bottom:6px}
+.choice-title{font-weight:600;display:block;font-size:15px}
+.choice-sub{font-size:12px;color:var(--text2);display:block;margin-top:3px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:14px 20px;border-radius:10px;border:none;cursor:pointer;font-size:15px;font-weight:600;width:100%;margin-top:10px;-webkit-appearance:none}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:active{opacity:.8}
+.btn-success{background:var(--green);color:#fff}
+.btn-success:active{opacity:.8}
+.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.btn-back{background:none;border:none;color:var(--text2);font-size:13px;padding:0 0 16px;cursor:pointer;display:block}
+.form-group{margin-bottom:14px}
+label{display:block;font-size:12px;color:var(--text2);margin-bottom:6px;font-weight:500;text-transform:uppercase;letter-spacing:.4px}
+input,select,textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:13px 14px;color:var(--text);font-size:15px;-webkit-appearance:none;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237a8fa6' stroke-width='2' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:36px}
+.kit-item{display:block;width:100%;padding:14px 16px;margin-bottom:8px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-weight:500;cursor:pointer;text-align:left;-webkit-appearance:none}
+.kit-item:active{background:var(--surface2)}
+.kit-badge{font-size:11px;color:var(--text2);float:right;margin-top:2px}
+.section-title{font-size:13px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin:20px 0 10px}
+.success{text-align:center;padding:40px 20px}
+.success-icon{font-size:64px;margin-bottom:16px}
+.success-title{font-size:20px;font-weight:700;margin-bottom:8px}
+.success-sub{font-size:14px;color:var(--text2);line-height:1.5}
+.req-num{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 14px;font-family:monospace;font-size:14px;color:var(--accent);margin-top:12px}
+.item-row{display:flex;gap:8px;align-items:flex-start;margin-bottom:8px}
+.item-row input:first-child{flex:2}
+.item-row input:last-child{flex:0 0 70px}
+.del-btn{flex:0 0 36px;height:44px;background:var(--red);border:none;border-radius:8px;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.step{display:none}
+.step.active{display:block}
+.progress{display:flex;gap:6px;margin-bottom:20px}
+.progress-dot{flex:1;height:4px;border-radius:2px;background:var(--border)}
+.progress-dot.done{background:var(--accent)}
+.divider{height:1px;background:var(--border);margin:20px 0}
+.info-box{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--text2);margin-bottom:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="logo">
+    <div class="logo-icon">✈️</div>
+    <div class="logo-title">AVRONIS MRO</div>
+    <div class="logo-sub">Заявка на видачу комплектуючих</div>
+  </div>
+
+  <!-- STEP 0: Choose type -->
+  <div class="step active" id="step-0">
+    <button class="choice-btn" onclick="goStep(1,'kit')">
+      <span class="choice-icon">🔧</span>
+      <span class="choice-title">100% заміна комплекту</span>
+      <span class="choice-sub">КАУ-115АМ · КАУ-30Б · РА-60Б · УГ-50</span>
+    </button>
+    <button class="choice-btn" onclick="goStep(1,'warehouse')">
+      <span class="choice-icon">📦</span>
+      <span class="choice-title">Обрати зі складу</span>
+      <span class="choice-sub">Вибрати потрібні позиції зі списку</span>
+    </button>
+    <button class="choice-btn" onclick="goStep(1,'manual')">
+      <span class="choice-icon">✏️</span>
+      <span class="choice-title">Ввести вручну</span>
+      <span class="choice-sub">Позиції відсутні на складі</span>
+    </button>
+  </div>
+
+  <!-- STEP 1: Info -->
+  <div class="step" id="step-1">
+    <button class="btn-back" onclick="goStep(0)">← Назад</button>
+    <div class="section-title">Ваші дані</div>
+    <div class="form-group">
+      <label>Виконавець *</label>
+      <input type="text" id="s1-exec" placeholder="Прізвище та ініціали" autocomplete="name">
+    </div>
+    <div class="form-group">
+      <label>№ Агрегату</label>
+      <input type="text" id="s1-agg" placeholder="КАУ-30Б №12345">
+    </div>
+    <div class="form-group">
+      <label>№ Проекту / Замовлення</label>
+      <input type="text" id="s1-proj" placeholder="AVR001...">
+    </div>
+    <div class="form-group">
+      <label>Робоче місце / Цех</label>
+      <input type="text" id="s1-wp" placeholder="Цех №2, РМ-5">
+    </div>
+    <button class="btn btn-primary" onclick="step1Next()">Далі →</button>
+  </div>
+
+  <!-- STEP 2a: Kit -->
+  <div class="step" id="step-kit">
+    <button class="btn-back" onclick="goStep(1,'kit')">← Назад</button>
+    <div class="section-title">Оберіть агрегат</div>
+    <button class="kit-item" onclick="selectKit('kau115am')">⚙️ КАУ-115АМ <span class="kit-badge">68 поз.</span></button>
+    <button class="kit-item" onclick="selectKit('kau30b')">⚙️ КАУ-30Б <span class="kit-badge">67 поз.</span></button>
+    <button class="kit-item" onclick="selectKit('ra60b')">⚙️ РА-60Б <span class="kit-badge">72 поз.</span></button>
+    <button class="kit-item" onclick="selectKit('ug50')">⚙️ УГ-50 <span class="kit-badge">29 поз.</span></button>
+  </div>
+
+  <!-- STEP 2b: Manual -->
+  <div class="step" id="step-manual">
+    <button class="btn-back" onclick="goStep(1,'manual')">← Назад</button>
+    <div class="section-title">Введіть позиції</div>
+    <div id="manual-items">
+      <div class="item-row">
+        <input type="text" placeholder="Найменування" class="m-name">
+        <input type="number" placeholder="К-сть" class="m-qty" value="1" min="1">
+        <button class="del-btn" onclick="delRow(this)">✕</button>
+      </div>
+    </div>
+    <button class="btn btn-ghost" onclick="addRow()" style="margin-top:6px">＋ Додати рядок</button>
+    <button class="btn btn-primary" onclick="manualNext()">Переглянути заявку →</button>
+  </div>
+
+  <!-- STEP 2c: Warehouse -->
+  <div class="step" id="step-warehouse">
+    <button class="btn-back" onclick="goStep(1,'warehouse')">← Назад</button>
+    <div class="section-title">Оберіть позиції зі складу</div>
+    <div class="form-group">
+      <input type="search" id="wh-search" placeholder="🔍 Пошук..." oninput="filterWh()">
+    </div>
+    <div id="wh-list" style="max-height:55vh;overflow-y:auto"></div>
+    <button class="btn btn-primary" onclick="whNext()">Переглянути заявку →</button>
+  </div>
+
+  <!-- STEP 3: Review -->
+  <div class="step" id="step-review">
+    <button class="btn-back" onclick="reviewBack()">← Назад</button>
+    <div class="section-title">Перевірте заявку</div>
+    <div id="review-meta" class="info-box"></div>
+    <div id="review-items" style="font-size:13px"></div>
+    <div class="divider"></div>
+    <button class="btn btn-success" onclick="submitRequest()">📋 Подати заявку</button>
+  </div>
+
+  <!-- SUCCESS -->
+  <div class="step" id="step-success">
+    <div class="success">
+      <div class="success-icon">✅</div>
+      <div class="success-title">Заявку подано!</div>
+      <div class="success-sub">Кладовщик отримав заявку.<br>Очікуйте підтвердження видачі.</div>
+      <div class="req-num" id="success-req-num"></div>
+      <button class="btn btn-ghost" onclick="reset()" style="margin-top:24px">← Нова заявка</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// =========== KIT DATA ===========
+const KITS = {
+  kau115am:{label:'КАУ-115АМ',items:[
+    {pn:'КАУ110-305Б',name:'Прокладка',qty:1},{pn:'КАУ115-203',name:'Манжета',qty:2},{pn:'',name:'Кільце Н8К-006 У-2-1,5 Г',qty:12},{pn:'',name:'Кільце Н8К-006 У-3,3-1,5 Г',qty:10},{pn:'',name:'Кільце Н8К-006 У-6,7-1,9 Г',qty:3},{pn:'',name:'Кільце Н8К-006 У-7,7-1,9 51-1668НТА',qty:3},{pn:'',name:'Кільце Н8К-006 У-8-1,5 А',qty:1},{pn:'',name:'Кільце Н8К-006 У-9,2-1,9 Г',qty:1},{pn:'',name:'Кільце Н8К-006 У-9,7-1,9 51-1668НТА',qty:4},{pn:'',name:'Кільце Н8К-006 У-10,6-1,9 Г',qty:8},{pn:'',name:'Кільце Н8К-006 У-12,6-1,9 Г',qty:6},{pn:'',name:'Кільце Н8К-006 У-12,6-2,5 Г',qty:1},{pn:'',name:'Кільце Н8К-006 У-13-2 А',qty:4},{pn:'',name:'Кільце Н8К-006 У-13-2,5 Г',qty:1},{pn:'',name:'Кільце Н8К-006 У-14,6-2,5 Г',qty:8},{pn:'',name:'Кільце Н8К-006 У-18,5-2 51-1668НТА',qty:1},{pn:'',name:'Кільце Н8К-006 У-19,5-2,5 51-1668НТА-1',qty:2},{pn:'',name:'Кільце Н8К-006 У-20,5-2,5 Г',qty:2},{pn:'',name:'Кільце Н8К-006 У-24-3 Г',qty:3},{pn:'',name:'Прокладка Н8К-006 ПФ-11-8,2',qty:3},{pn:'',name:'Прокладка Н8К-006 ПФ-18-14,2',qty:2},{pn:'',name:'Прокладка Н8К-006 ПФ-20-16,2',qty:3},{pn:'',name:'Прокладка Н8К-006 ПФ-24-20',qty:4},{pn:'',name:'Прокладка Н8К-006 ПФ-26-22,2',qty:4},{pn:'',name:'Прокладка Н8К-006 ПФ-30-25',qty:4},{pn:'',name:'Прокладка Н8К-006 ПФТ-38,3-32',qty:4},{pn:'',name:'Прокладка Н8К-006 ПФТ-40-35',qty:1},{pn:'',name:'Прокладка Н8К-006 ПФ-41-36',qty:2},{pn:'',name:'Прокладка Н8К-006 ПФ-69,8-64,1',qty:2},{pn:'',name:'Лінійний датчик 45Д-50-1',qty:1},{pn:'',name:'Фільтроелемент 340.129А',qty:1}
+  ]},
+  kau30b:{label:'КАУ-30Б',items:[
+    {pn:'РА60А-001',name:'Прокладка',qty:1},{pn:'РА60-135',name:'Трубка гумова',qty:2},{pn:'БУ-1063Б',name:'Узел ущільнювача',qty:2},{pn:'У-2,3-1-А',name:'Кільце ущільнювальне',qty:1},{pn:'У-3,3-1,5-А',name:'Кільце ущільнювальне',qty:1},{pn:'У-4,7-1,9-А',name:'Кільце ущільнювальне',qty:5},{pn:'У-8-1,5-А',name:'Кільце ущільнювальне',qty:1},{pn:'У-8-2-А',name:'Кільце ущільнювальне',qty:3},{pn:'У-8,4-1-ГС',name:'Кільце ущільнювальне',qty:1},{pn:'У-9-2,5-А',name:'Кільце ущільнювальне',qty:2},{pn:'У-10-2-51-1668 НТА',name:'Кільце ущільнювальне',qty:10},{pn:'У-11,6-2,5-А',name:'Кільце ущільнювальне',qty:1},{pn:'У-12-2-51-1668 НТА',name:'Кільце ущільнювальне',qty:3},{pn:'У-13-2-А',name:'Кільце ущільнювальне',qty:4},{pn:'У-13-3-51-1668 НТА',name:'Кільце ущільнювальне',qty:3},{pn:'У-14-2,5-51-1668 НТА',name:'Кільце ущільнювальне',qty:13},{pn:'У-15,6-2,5-51-1668 НТА',name:'Кільце ущільнювальне',qty:2},{pn:'У-18,5-3-51-1668 НТА',name:'Кільце ущільнювальне',qty:2},{pn:'У-19,5-2,5-51-1668 НТА',name:'Кільце ущільнювальне',qty:8},{pn:'У-21,5-2,5-51-1668 НТА',name:'Кільце ущільнювальне',qty:1},{pn:'У-22,5-2,5-А',name:'Кільце ущільнювальне',qty:2},{pn:'У-25-3-51-1668НТА-I',name:'Кільце ущільнювальне',qty:4},{pn:'У-26,5-3-51-1668НТА',name:'Кільце ущільнювальне',qty:2},{pn:'У-31-3,7-51-1668НТА-I',name:'Кільце ущільнювальне',qty:2},{pn:'У-60-3,5-Г1',name:'Кільце ущільнювальне',qty:2},{pn:'КАУ30Б-042',name:'Кільце ущільнювальне',qty:1},{pn:'ПФС-32-27',name:'Прокладка',qty:1},{pn:'ПФ-44,2-32,2',name:'Прокладка',qty:2},{pn:'ПФ-69,8-64,2',name:'Прокладка',qty:2},{pn:'КАУ30Б-015',name:'Прокладка',qty:6},{pn:'РА16-409А',name:'Контровка',qty:2},{pn:'КАУ30-005А',name:'Контровка',qty:3},{pn:'РА60А-003',name:'Шайба контровочна',qty:1},{pn:'ПМ15-681',name:'Втулка',qty:1},{pn:'РА60Б-615',name:'Прокладка',qty:1},{pn:'РА60А-021А',name:'Пружина',qty:1}
+  ]},
+  ra60b:{label:'РА-60Б',items:[
+    {pn:'РА60А-001',name:'Прокладка',qty:1},{pn:'РА60-135',name:'Трубка гумова',qty:2},{pn:'БУ-1063Б',name:'Узел ущільнювача',qty:2},{pn:'У-2,3-1-А',name:'Кільце ущільнювальне',qty:1},{pn:'У-3,3-1,5-А',name:'Кільце ущільнювальне',qty:1},{pn:'У-4,7-1,9-А',name:'Кільце ущільнювальне',qty:5},{pn:'У-8-1,5-А',name:'Кільце ущільнювальне',qty:1},{pn:'У-9-2,5-А',name:'Кільце ущільнювальне',qty:2},{pn:'У-10-2-51-1668 НТА',name:'Кільце ущільнювальне',qty:10},{pn:'У-13-2-А',name:'Кільце ущільнювальне',qty:4},{pn:'У-14-2,5-51-1668 НТА',name:'Кільце ущільнювальне',qty:13},{pn:'У-19,5-2,5-51-1668 НТА',name:'Кільце ущільнювальне',qty:8},{pn:'У-25-3-51-1668НТА-I',name:'Кільце ущільнювальне',qty:4},{pn:'У-26,5-3-51-1668НТА',name:'Кільце ущільнювальне',qty:2},{pn:'У-60-3,5-Г1',name:'Кільце ущільнювальне',qty:2},{pn:'У-68-3,5-51-1668НТА',name:'Кільце ущільнювальне',qty:2},{pn:'ПФС-32-27',name:'Прокладка',qty:1},{pn:'ПФ-44,2-32,2',name:'Прокладка',qty:2},{pn:'ПФ-69,8-64,2',name:'Прокладка',qty:2},{pn:'КАУ30Б-015',name:'Прокладка',qty:6},{pn:'РА16-409А',name:'Контровка',qty:2},{pn:'КАУ30-005А',name:'Контровка',qty:6},{pn:'ПМ15-681',name:'Втулка',qty:1},{pn:'РА60Б-615',name:'Прокладка',qty:1},{pn:'РА60А-021А',name:'Пружина',qty:1},{pn:'ПМ22-2В',name:'Мікровимикач',qty:2}
+  ]},
+  ug50:{label:'УГ-50',items:[
+    {pn:'УГ50А-100-01',name:'Перетворювач електромеханічний',qty:1},{pn:'УГ50А-030-01',name:'Гільза із золотником',qty:1},{pn:'РМ120-460-3',name:'Дросель',qty:2},{pn:'УГ30А-310-2',name:'Сопло',qty:2},{pn:'УГ30А-303',name:'Пружина',qty:1},{pn:'УГ50А-050',name:'Фільтр',qty:1},{pn:'УГ30А-206-2',name:'Пружина',qty:2},{pn:'УГ30А-206-4',name:'Пружина',qty:2},{pn:'УГ30А-001',name:'Гвинт',qty:2},{pn:'УГ50А-002',name:'Гвинт',qty:4},{pn:'РМ120-415',name:'Контровка',qty:2},{pn:'УГ30А-203',name:'Пробка',qty:2},{pn:'',name:'Кільце Н8К-006 У-2-1,5 51-1668НТА',qty:2},{pn:'',name:'Кільце Н8К-006 У-2,8-1,5 51-1668НТА',qty:4},{pn:'',name:'Кільце Н8К-006 У-3,3-1,5 51-1668НТА',qty:4},{pn:'',name:'Кільце Н8К-006 У-6,7-1,9 51-1668НТА',qty:3},{pn:'',name:'Кільце Н8К-006 У-9,7-1,9 51-1668НТА',qty:2},{pn:'',name:'Кільце Н8К-006 У-12-1,5 Е',qty:6},{pn:'',name:'Кільце Н8К-006 У-12,6-1,9 51-1668НТА',qty:2}
+  ]}
+};
+
+const WH_ITEMS = [
+  {name:'Прокладка РА60А-001',pn:'РА60А-001'},{name:'Трубка гумова РА60-135',pn:'РА60-135'},{name:'Кільце У-14-2,5',pn:'У-14-2,5-51-1668 НТА'},{name:'Прокладка КАУ30Б-015',pn:'КАУ30Б-015'},{name:'Контровка РА16-409А',pn:'РА16-409А'},{name:'Контровка КАУ30-005А',pn:'КАУ30-005А'},{name:'Кільце У-19,5-2,5',pn:'У-19,5-2,5-51-1668 НТА'},{name:'Кільце У-10-2',pn:'У-10-2-51-1668 НТА'},{name:'Прокладка ПФ-69,8-64,2',pn:'ПФ-69,8-64,2'},{name:'Прокладка ПФ-44,2-32,2',pn:'ПФ-44,2-32,2'},{name:'Втулка ПМ15-681',pn:'ПМ15-681'},{name:'Пружина РА60А-021А',pn:'РА60А-021А'},{name:'Шайба контровочна 3455А',pn:'3455А-4-Кд'},{name:'Шайба КАУ30Б-044',pn:'КАУ30Б-044'},{name:'Шплінт 1х14',pn:'1х14 ГОСТ 397-79'},{name:'Кільце У-13-2-А',pn:'У-13-2-А'},{name:'Кільце У-13-3',pn:'У-13-3-51-1668НТА'},{name:'Кільце У-22,5-2,5',pn:'У-22,5-2,5-А'},{name:'Прокладка РА60Б-615',pn:'РА60Б-615'},{name:'Кільце У-60-3,5',pn:'У-60-3,5-Г1'}
+];
+
+// =========== STATE ===========
+let currentType = '';
+let selectedItems = [];
+let userInfo = {};
+let whSelected = {};
+
+function goStep(n, type) {
+  document.querySelectorAll('.step').forEach(s=>s.classList.remove('active'));
+  if (n===0) { document.getElementById('step-0').classList.add('active'); return; }
+  if (n===1) {
+    if (type) currentType = type;
+    document.getElementById('step-1').classList.add('active');
+    return;
+  }
+  if (n==='kit') { document.getElementById('step-kit').classList.add('active'); return; }
+  if (n==='manual') { document.getElementById('step-manual').classList.add('active'); return; }
+  if (n==='warehouse') {
+    document.getElementById('step-warehouse').classList.add('active');
+    renderWh('');
+    return;
+  }
+  if (n==='review') { document.getElementById('step-review').classList.add('active'); return; }
+  if (n==='success') { document.getElementById('step-success').classList.add('active'); return; }
+}
+
+function step1Next() {
+  const exec = document.getElementById('s1-exec').value.trim();
+  if (!exec) { alert('Введіть ПІБ виконавця'); return; }
+  userInfo = {
+    executor: exec,
+    aggregate: document.getElementById('s1-agg').value.trim(),
+    project: document.getElementById('s1-proj').value.trim(),
+    workplace: document.getElementById('s1-wp').value.trim()
+  };
+  if (currentType==='kit') goStep('kit');
+  else if (currentType==='manual') goStep('manual');
+  else if (currentType==='warehouse') goStep('warehouse');
+}
+
+// KIT
+function selectKit(key) {
+  const kit = KITS[key];
+  selectedItems = kit.items.map(i=>({...i, unit:'шт'}));
+  userInfo.aggregate = userInfo.aggregate || kit.label;
+  userInfo.kitType = kit.label;
+  showReview();
+}
+
+// MANUAL
+function addRow() {
+  const div = document.createElement('div');
+  div.className = 'item-row';
+  div.innerHTML = `<input type="text" placeholder="Найменування" class="m-name"><input type="number" placeholder="К-сть" class="m-qty" value="1" min="1"><button class="del-btn" onclick="delRow(this)">✕</button>`;
+  document.getElementById('manual-items').appendChild(div);
+}
+function delRow(btn) {
+  const rows = document.querySelectorAll('.item-row');
+  if (rows.length > 1) btn.closest('.item-row').remove();
+}
+function manualNext() {
+  const items = [];
+  document.querySelectorAll('.item-row').forEach(row => {
+    const name = row.querySelector('.m-name').value.trim();
+    if (!name) return;
+    items.push({name, pn:'', qty: parseFloat(row.querySelector('.m-qty').value)||1, unit:'шт'});
+  });
+  if (!items.length) { alert('Введіть хоча б одну позицію'); return; }
+  selectedItems = items;
+  showReview();
+}
+
+// WAREHOUSE
+function renderWh(search) {
+  const filtered = WH_ITEMS.filter(i => !search || i.name.toLowerCase().includes(search.toLowerCase()) || i.pn.toLowerCase().includes(search.toLowerCase()));
+  document.getElementById('wh-list').innerHTML = filtered.map(item => `
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--border)">
+      <input type="checkbox" id="wh-${item.pn.replace(/[^a-z0-9]/gi,'')}" ${whSelected[item.pn]?'checked':''} onchange="toggleWh('${item.pn.replace(/'/g,'')}')" style="width:20px;height:20px;accent-color:var(--accent);flex-shrink:0">
+      <div style="flex:1">
+        <div style="font-size:14px">${item.name}</div>
+        <div style="font-size:11px;color:var(--text2);font-family:monospace">${item.pn}</div>
+      </div>
+      <input type="number" value="${whSelected[item.pn]||1}" min="1" onchange="setWhQty('${item.pn.replace(/'/g,'')}',this.value)" style="width:60px;padding:8px;font-size:13px;text-align:center">
+    </div>`).join('');
+}
+function filterWh() { renderWh(document.getElementById('wh-search').value); }
+function toggleWh(pn) {
+  if (whSelected[pn]) delete whSelected[pn];
+  else whSelected[pn] = 1;
+}
+function setWhQty(pn, val) { whSelected[pn] = parseFloat(val)||1; }
+function whNext() {
+  const items = [];
+  Object.entries(whSelected).forEach(([pn, qty]) => {
+    const item = WH_ITEMS.find(i=>i.pn===pn);
+    if (item) items.push({name:item.name, pn, qty, unit:'шт'});
+  });
+  if (!items.length) { alert('Оберіть хоча б одну позицію'); return; }
+  selectedItems = items;
+  showReview();
+}
+
+// REVIEW
+function showReview() {
+  const meta = document.getElementById('review-meta');
+  meta.innerHTML = `
+    <strong>👷 ${userInfo.executor}</strong><br>
+    ${userInfo.aggregate ? '⚙️ ' + userInfo.aggregate + '<br>' : ''}
+    ${userInfo.project ? '📁 ' + userInfo.project + '<br>' : ''}
+    ${userInfo.workplace ? '🏭 ' + userInfo.workplace : ''}
+  `;
+  const list = document.getElementById('review-items');
+  list.innerHTML = selectedItems.map((it,i) => `
+    <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <span>${i+1}. ${it.name}${it.pn?' <span style="color:var(--text2);font-family:monospace;font-size:11px">['+it.pn+']</span>':''}</span>
+      <span style="font-weight:700;flex-shrink:0;margin-left:8px">${it.qty} ${it.unit||'шт'}</span>
+    </div>`).join('');
+  goStep('review');
+}
+
+function reviewBack() {
+  if (currentType==='kit') goStep('kit');
+  else if (currentType==='manual') goStep('manual');
+  else goStep('warehouse');
+}
+
+// SUBMIT
+function submitRequest() {
+  const reqId = 'ЗАМ-' + String(Date.now()).slice(-6);
+  // Save to localStorage as pending (main app reads from IndexedDB, this is fallback)
+  const req = {
+    id: reqId,
+    executor: userInfo.executor,
+    aggregate: userInfo.aggregate || '',
+    project: userInfo.project || '',
+    workplace: userInfo.workplace || '',
+    items: selectedItems,
+    status: 'new',
+    createdAt: new Date().toISOString(),
+    note: currentType==='kit' ? `100% заміна ${userInfo.kitType} (з QR)` : (currentType==='manual' ? 'Ручне введення (з QR)' : 'Обрано зі складу (з QR)')
+  };
+
+  // Try IndexedDB
+  try {
+    const dbReq = indexedDB.open('avronis_v2', 1);
+    dbReq.onsuccess = e => {
+      const db = e.target.result;
+      const tx = db.transaction('requests', 'readwrite');
+      tx.objectStore('requests').add(req);
+    };
+  } catch(e) {}
+
+  // Fallback: localStorage
+  try {
+    const pending = JSON.parse(localStorage.getItem('avronis_pending')||'[]');
+    pending.push(req);
+    localStorage.setItem('avronis_pending', JSON.stringify(pending));
+  } catch(e) {}
+
+  document.getElementById('success-req-num').textContent = reqId;
+  goStep('success');
+}
+
+function reset() {
+  currentType=''; selectedItems=[]; userInfo={}; whSelected={};
+  document.getElementById('s1-exec').value='';
+  document.getElementById('s1-agg').value='';
+  document.getElementById('s1-proj').value='';
+  document.getElementById('s1-wp').value='';
+  document.getElementById('manual-items').innerHTML=`<div class="item-row"><input type="text" placeholder="Найменування" class="m-name"><input type="number" placeholder="К-сть" class="m-qty" value="1" min="1"><button class="del-btn" onclick="delRow(this)">✕</button></div>`;
+  goStep(0);
+}
+</script>
+</body>
+</html>
