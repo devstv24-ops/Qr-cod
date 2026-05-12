@@ -2828,16 +2828,24 @@ async function importBackup(input) {
   if (!file) return;
   const text = await file.text();
   let data;
-  try { data = JSON.parse(text); } catch { showNotif('Невірний файл','err'); return; }
+  try { data = JSON.parse(text); } catch(e) { showNotif('Невірний файл','err'); return; }
   if (!confirm(`Відновити з резервної копії від ${data.exportedAt||'?'}?\nВсі поточні дані будуть замінені.`)) return;
+  if (!db) {
+    try { await initDB(); } catch(e) { showNotif('Помилка бази даних','err'); return; }
+  }
   for (const store of ['inventory','requests','journal','acts']) {
-    await dbClear(store);
-    for (const item of (data[store]||[])) { await dbAdd(store, item); }
+    try {
+      await dbClear(store);
+      for (const item of (data[store]||[])) {
+        const clean = Object.assign({}, item);
+        delete clean.id;
+        await dbAdd(store, clean);
+      }
+    } catch(e) { console.warn('store error:', store, e); }
   }
   showNotif('Дані відновлено з резервної копії ✅');
-  loadDashboard();
+  setTimeout(() => { loadDashboard(); renderBackupStats(); }, 300);
   input.value = '';
-  renderBackupStats();
 }
 
 async function renderBackupStats() {
@@ -3061,17 +3069,33 @@ async function preloadDataIfEmpty() {
 
 
 // ===================== INIT =====================
-initDB().then(async () => {
+async function startApp() {
+  try {
+    await initDB();
+  } catch(e) {
+    // Спробуємо видалити стару базу і створити нову
+    console.warn('DB init failed, trying to recreate:', e);
+    try {
+      await new Promise((res, rej) => {
+        const del = indexedDB.deleteDatabase(DB_NAME);
+        del.onsuccess = res;
+        del.onerror = rej;
+      });
+      await initDB();
+    } catch(e2) {
+      console.error('DB error:', e2);
+      showNotif('Помилка бази даних','err');
+      return;
+    }
+  }
   checkHash();
   if (window.location.hash !== '#mobile-request' &&
       new URLSearchParams(window.location.search).get('mode') !== 'mobile') {
     await preloadDataIfEmpty();
     loadDashboard();
   }
-}).catch(err => {
-  console.error('DB error:', err);
-  showNotif('Помилка бази даних','err');
-});
+}
+startApp();
 
 // ===================== PRELOADED DATA (з Excel файлу) =====================
 </script>
