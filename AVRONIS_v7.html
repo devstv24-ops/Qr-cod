@@ -1231,23 +1231,44 @@ async function syncRequestsFromGoogle() {
   btn.disabled = true;
   btn.textContent = '⏳ Завантаження...';
   status.textContent = '';
+
   try {
-    const resp = await fetch(GAS_URL + '?action=getRequests', { method: 'GET' });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const data = await resp.json();
-    if (!data || !Array.isArray(data.requests)) throw new Error('Неправильний формат відповіді');
+    // Використовуємо JSONP через script tag щоб обійти редирект авторизації
+    const data = await new Promise((resolve, reject) => {
+      const callbackName = 'avronis_cb_' + Date.now();
+      const script = document.createElement('script');
+      const timeout = setTimeout(() => {
+        delete window[callbackName];
+        document.body.removeChild(script);
+        reject(new Error('timeout'));
+      }, 10000);
+
+      window[callbackName] = (data) => {
+        clearTimeout(timeout);
+        delete window[callbackName];
+        document.body.removeChild(script);
+        resolve(data);
+      };
+
+      script.src = GAS_URL + '?action=getRequests&callback=' + callbackName;
+      script.onerror = () => {
+        clearTimeout(timeout);
+        delete window[callbackName];
+        reject(new Error('script error'));
+      };
+      document.body.appendChild(script);
+    });
+
+    if (!data || !Array.isArray(data.requests)) throw new Error('bad format');
 
     const existing = await dbGetAll('requests');
-    const existingIds = new Set(existing.map(r => r.googleRowId));
+    const existingIds = new Set(existing.map(r => r.googleRowId).filter(Boolean));
 
     let added = 0;
     for (const row of data.requests) {
-      // Пропускаємо якщо вже є по googleRowId
       if (row.googleRowId && existingIds.has(row.googleRowId)) continue;
-      // Пропускаємо порожні рядки
       if (!row.executor && !row.aggregate && !(row.items && row.items.length)) continue;
-
-      const newReq = {
+      await dbAdd('requests', {
         executor: row.executor || '',
         aggregate: row.aggregate || '',
         project: row.project || '',
@@ -1258,16 +1279,12 @@ async function syncRequestsFromGoogle() {
         createdAt: row.createdAt || new Date().toISOString(),
         googleRowId: row.googleRowId || null,
         source: 'mobile'
-      };
-      await dbAdd('requests', newReq);
+      });
       added++;
     }
 
     status.textContent = added > 0 ? `✅ Додано ${added} нових` : '✅ Все актуально';
-    if (added > 0) {
-      renderRequests();
-      loadDashboard();
-    }
+    if (added > 0) { renderRequests(); loadDashboard(); }
   } catch(e) {
     status.textContent = '⚠️ Потрібно оновити Apps Script';
     console.warn('Sync error:', e);
