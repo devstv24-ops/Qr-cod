@@ -1541,24 +1541,33 @@ const KITS = {
 // ===================== IndexedDB =====================
 let db;
 const DB_NAME = 'avronis_v2';
-const DB_VER = 1;
+const DB_VER = 2;
 
 function initDB() {
   return new Promise((res, rej) => {
-    const req = indexedDB.open(DB_NAME, DB_VER);
+    let req;
+    try {
+      req = indexedDB.open(DB_NAME, DB_VER);
+    } catch(e) {
+      rej(e); return;
+    }
     req.onupgradeneeded = e => {
       const d = e.target.result;
-      if (!d.objectStoreNames.contains('inventory')) {
-        const s = d.createObjectStore('inventory', {keyPath:'id', autoIncrement:true});
-        s.createIndex('pn','pn',{unique:false});
-      }
-      if (!d.objectStoreNames.contains('requests')) d.createObjectStore('requests',{keyPath:'id',autoIncrement:true});
-      if (!d.objectStoreNames.contains('journal')) d.createObjectStore('journal',{keyPath:'id',autoIncrement:true});
-      if (!d.objectStoreNames.contains('acts')) d.createObjectStore('acts',{keyPath:'id',autoIncrement:true});
-      if (!d.objectStoreNames.contains('tools_edits')) d.createObjectStore('tools_edits',{keyPath:'id',autoIncrement:true});
+      // Видаляємо старі сховища якщо є конфлікт
+      const stores = ['inventory','requests','journal','acts','tools_edits'];
+      stores.forEach(name => {
+        if (d.objectStoreNames.contains(name)) d.deleteObjectStore(name);
+      });
+      const s = d.createObjectStore('inventory', {keyPath:'id', autoIncrement:true});
+      s.createIndex('pn','pn',{unique:false});
+      d.createObjectStore('requests',{keyPath:'id',autoIncrement:true});
+      d.createObjectStore('journal',{keyPath:'id',autoIncrement:true});
+      d.createObjectStore('acts',{keyPath:'id',autoIncrement:true});
+      d.createObjectStore('tools_edits',{keyPath:'id',autoIncrement:true});
     };
     req.onsuccess = e => { db = e.target.result; res(db); };
-    req.onerror = e => rej(e);
+    req.onerror = e => rej(e.target.error || e);
+    req.onblocked = () => rej(new Error('DB blocked'));
   });
 }
 
@@ -3073,18 +3082,20 @@ async function startApp() {
   try {
     await initDB();
   } catch(e) {
+    console.error('DB init failed:', e);
     // Спробуємо видалити стару базу і створити нову
-    console.warn('DB init failed, trying to recreate:', e);
     try {
       await new Promise((res, rej) => {
         const del = indexedDB.deleteDatabase(DB_NAME);
         del.onsuccess = res;
         del.onerror = rej;
+        del.onblocked = res; // продовжуємо навіть якщо заблоковано
       });
       await initDB();
     } catch(e2) {
-      console.error('DB error:', e2);
-      showNotif('Помилка бази даних','err');
+      console.error('DB recreate failed:', e2);
+      const msg = e2 && e2.message ? e2.message : String(e2);
+      showNotif('Помилка бази: ' + msg, 'err');
       return;
     }
   }
