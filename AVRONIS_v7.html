@@ -276,11 +276,16 @@ select option { background: var(--surface2); }
 @media print {
   #sidebar, #topbar, .no-print, .modal-close { display: none !important; }
   #main { margin: 0; }
-  body { background: #fff; color: #000; }
-  .card, .req-card, .modal { border: 1px solid #ccc; box-shadow: none; }
-  .modal-overlay { position: static !important; display: block !important; background: none; backdrop-filter: none; padding: 0; }
-  .modal { max-height: none; border-radius: 0; }
-  .print-doc { display: block !important; }
+  body { background: #fff !important; color: #000 !important; }
+  .modal-overlay { position: fixed !important; top: 0; left: 0; width: 100%; height: 100%; background: #fff !important; backdrop-filter: none; padding: 0; display: flex !important; align-items: flex-start; justify-content: center; }
+  .modal { max-height: none; border-radius: 0; background: #fff !important; color: #000 !important; box-shadow: none; width: 100%; max-width: 100%; }
+  .modal-body { padding: 0 !important; }
+  #print-content { background: #fff !important; color: #000 !important; }
+  #print-content * { background: transparent !important; color: #000 !important; }
+  #print-content table { border-collapse: collapse !important; }
+  #print-content td, #print-content th { border: 1px solid #000 !important; color: #000 !important; }
+  .modal-overlay:not(#modal-print) { display: none !important; }
+  #modal-print { display: flex !important; }
 }
 .print-doc { display: none; }
 
@@ -987,17 +992,17 @@ select option { background: var(--surface2); }
 
 <!-- PRINT DOCUMENT MODAL -->
 <div class="modal-overlay" id="modal-print">
-  <div class="modal" style="max-width:700px">
+  <div class="modal" style="max-width:780px">
     <div class="modal-hdr no-print">
-      <div class="modal-title">🖨️ Друк накладної</div>
+      <div class="modal-title" id="print-modal-title">🖨️ Друк акту ВК</div>
       <button class="modal-close" onclick="closeModal('modal-print')">✕</button>
     </div>
-    <div class="modal-body">
-      <div id="print-content"></div>
+    <div class="modal-body" style="padding:16px">
+      <div id="print-content" style="background:#fff;color:#000"></div>
     </div>
     <div class="modal-footer no-print">
       <button class="btn btn-ghost" onclick="closeModal('modal-print')">Закрити</button>
-      <button class="btn btn-primary" onclick="window.print()">🖨️ Друкувати</button>
+      <button class="btn btn-primary" onclick="printCurrentContent()">🖨️ Друкувати</button>
     </div>
   </div>
 </div>
@@ -2205,6 +2210,7 @@ async function printRequest(id) {
       </div>
     </div>`;
   document.getElementById('print-content').innerHTML = html;
+  document.getElementById('print-modal-title').textContent = '🖨️ Накладна на видачу';
   openModal('modal-print');
 }
 
@@ -2469,177 +2475,273 @@ async function deleteAct(id) {
   renderActs();
 }
 
+function printCurrentContent() {
+  const content = document.getElementById('print-content').innerHTML;
+  const w = window.open('', '_blank', 'width=900,height=700');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: Arial, sans-serif; font-size: 11px; color: #000; background: #fff; }
+    table { border-collapse: collapse; width: 100%; }
+    td, th { border: 1px solid #000; padding: 3px 5px; }
+    .section-header { background: #e0e0e0 !important; font-weight: bold; text-align: center; }
+    .page-break { page-break-after: always; }
+    @media print { body { margin: 0; } }
+  </style></head><body>${content}</body></html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(() => { w.print(); }, 500);
+}
+
 async function printAct(id) {
   const a = await dbGet('acts', id);
   const actN = a.actNum || ('AV' + String(id).padStart(5,'0'));
   const result = a.result || '+';
-  // Full form matching AMO-CiV-F.0015 template
+  const svc = result === '+';
+  const uns = result === '-';
+  const rej = result === 'Z';
+
   const html = `
-<div style="font-family:Arial,sans-serif;color:#000;font-size:11px;max-width:750px;padding:8px">
+<div style="font-family:Arial,sans-serif;font-size:10px;color:#000;background:#fff;padding:8px;max-width:720px">
+
+  <!-- РЯДОК 1: ЗАГОЛОВОК -->
   <table style="width:100%;border-collapse:collapse;margin-bottom:0">
     <tr>
-      <td style="border:1px solid #000;padding:4px 6px;width:30px;font-weight:bold;text-align:center">1</td>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold;text-align:center;font-size:13px">INCOMING INSPECTION REPORT <em style="font-weight:normal">(акт вхідного контролю)</em></td>
-      <td style="border:1px solid #000;padding:4px 6px;width:30px;font-weight:bold">№</td>
-      <td style="border:1px solid #000;padding:4px 6px;min-width:80px;font-weight:bold">${actN}</td>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold">Date <em>(дата)</em>:</td>
-      <td style="border:1px solid #000;padding:4px 6px;min-width:80px">${a.date||''}</td>
-      <td style="border:1px solid #000;padding:4px 6px;font-size:10px;color:#666">AMO-CiV-F.0015</td>
+      <td style="border:1px solid #000;padding:3px 5px;width:25px;font-weight:bold;text-align:center">1</td>
+      <td style="border:1px solid #000;padding:3px 5px;font-weight:bold;text-align:center;font-size:12px">
+        INCOMING INSPECTION REPORT<br><em style="font-size:10px;font-weight:normal">(акт вхідного контролю)</em>
+      </td>
+      <td style="border:1px solid #000;padding:3px 5px;width:25px;font-weight:bold">№</td>
+      <td style="border:1px solid #000;padding:3px 5px;width:80px;font-weight:bold">${actN}</td>
+      <td style="border:1px solid #000;padding:3px 5px;font-weight:bold">Date: <em style="font-weight:normal">(дата)</em></td>
+      <td style="border:1px solid #000;padding:3px 5px;width:90px">${a.date||''}</td>
+      <td style="border:1px solid #000;padding:3px 5px;width:90px;font-size:9px;font-weight:bold">AMO-CiV-F.0015</td>
     </tr>
   </table>
+
+  <!-- СЕКЦІЯ I -->
   <table style="width:100%;border-collapse:collapse">
     <tr>
-      <td colspan="6" style="border:1px solid #000;padding:5px 8px;font-weight:bold;background:#f5f5f5">
-        І. Compliance Check Against Purchase Order <em>(перевірка відповідності замовленню)</em>
+      <td colspan="4" style="border:1px solid #000;padding:4px 6px;font-weight:bold;text-align:center">
+        I. Compliance Check Against Purchase Order<br>
+        <em style="font-size:9px;font-weight:normal">(перевірка відповідності замовленню)</em>
       </td>
     </tr>
     <tr>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold;width:30px">2</td>
-      <td colspan="2" style="border:1px solid #000;padding:4px 6px">Accompanying Documentation <em>(Супровідна документація)</em>:<br><strong>${a.docs||'—'}</strong></td>
-      <td colspan="3" style="border:1px solid #000;padding:4px 6px">Non-Conformity Detected <em>(виявлено невідповідність)</em>: ${result==='-'?'☑':'☐'}</td>
-    </tr>
-    <tr>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold">3</td>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold">Item Name <em>(найменування)</em>:</td>
-      <td colspan="2" style="border:1px solid #000;padding:4px 6px"><strong>${a.name}</strong></td>
-      <td style="border:1px solid #000;padding:4px 6px;font-size:10px">Вид: <strong>${a.category||'—'}</strong></td>
-      <td style="border:1px solid #000;padding:4px 6px"></td>
-    </tr>
-    <tr>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold">4</td>
-      <td colspan="2" style="border:1px solid #000;padding:4px 6px">Part Number (P/N) <em>(шифр)</em>: <strong>${a.pn||'—'}</strong></td>
-      <td colspan="3" style="border:1px solid #000;padding:4px 6px"></td>
-    </tr>
-    <tr>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold">5</td>
-      <td colspan="2" style="border:1px solid #000;padding:4px 6px">Serial Number (S/N) <em>(серійний №)</em>: <strong>${a.sn||'—'}</strong></td>
-      <td colspan="3" style="border:1px solid #000;padding:4px 6px"></td>
-    </tr>
-    <tr>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold">6</td>
-      <td colspan="2" style="border:1px solid #000;padding:4px 6px">Year of Manufacture <em>(рік випуску)</em></td>
-      <td colspan="3" style="border:1px solid #000;padding:4px 6px"></td>
-    </tr>
-    <tr>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold">7</td>
-      <td colspan="2" style="border:1px solid #000;padding:4px 6px">Total Time Since New/Last Overhaul <em>(напрацювання)</em></td>
-      <td colspan="3" style="border:1px solid #000;padding:4px 6px"></td>
-    </tr>
-    <tr>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold">8</td>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold">Quantity <em>(кількість)</em>:</td>
-      <td style="border:1px solid #000;padding:4px 6px"><strong>${a.qty}</strong></td>
-      <td colspan="3" style="border:1px solid #000;padding:4px 6px"></td>
-    </tr>
-    <tr>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold">9</td>
-      <td colspan="2" style="border:1px solid #000;padding:4px 6px">Serial Documentation / Certificate of Conformity</td>
-      <td colspan="3" style="border:1px solid #000;padding:4px 6px"></td>
-    </tr>
-    <tr>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold">10</td>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold">Supplier/Customer <em>(постачальник)</em>:</td>
-      <td style="border:1px solid #000;padding:4px 6px"><strong>${a.supplier||'—'}</strong></td>
-      <td colspan="3" style="border:1px solid #000;padding:4px 6px"></td>
-    </tr>
-    <tr>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold">11</td>
-      <td colspan="5" style="border:1px solid #000;padding:4px 6px">
-        Name and Signature of Inspector <em>(прізвище та підпис особи що проводила перевірку)</em>:
-        <strong>${a.inspector||''}</strong> ___________________________________
-      </td>
-    </tr>
-    <!-- Section II -->
-    <tr>
-      <td colspan="6" style="border:1px solid #000;padding:5px 8px;font-weight:bold;background:#f5f5f5">
-        ІІ. VISUAL INSPECTION <em>(Візуальний огляд)</em>
+      <td colspan="4" style="border:1px solid #000;padding:3px 5px">
+        <strong>Purchase Order No.</strong> <em>(замовлення №)</em>
       </td>
     </tr>
     <tr>
-      <td style="border:1px solid #000;padding:4px 6px"></td>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold">Direction of Inspection</td>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold;text-align:center" colspan="2">Результати перевірки</td>
-      <td colspan="2" style="border:1px solid #000"></td>
+      <td style="border:1px solid #000;padding:3px 5px;width:25px;font-weight:bold">2</td>
+      <td style="border:1px solid #000;padding:3px 5px">
+        <strong>Accompanying Documentation:</strong><br>
+        <em>Супровідна документація</em><br>
+        ${a.docs||''}
+      </td>
+      <td colspan="2" style="border:1px solid #000;padding:3px 5px">
+        Non-Conformity Detected <em>виявлено невідповідність</em>
+      </td>
     </tr>
     <tr>
-      <td style="border:1px solid #000;padding:4px 6px"></td>
-      <td style="border:1px solid #000;padding:4px 6px"></td>
-      <td style="border:1px solid #000;padding:4px 6px;font-size:10px">Data for Assessment</td>
-      <td style="border:1px solid #000;padding:4px 6px;font-size:10px">Meets Requirements</td>
-      <td style="border:1px solid #000;padding:4px 6px;font-size:10px" colspan="2">Non-Conformity</td>
+      <td style="border:1px solid #000;padding:3px 5px;font-weight:bold">3</td>
+      <td style="border:1px solid #000;padding:3px 5px">
+        <strong>Item Name:</strong> <em>найменування</em><br>${a.name||''}
+      </td>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
     </tr>
-    ${[['12','Packaging (пакування)'],['13','Preservation (консервація)'],['14','External Condition (зовнішній стан)'],['15','Completeness (комплектність)'],['16','Expiry Date / Calibration (термін придатності)'],['17','Sealing (пломбування)']].map(([n,lbl])=>`
     <tr>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold">${n}</td>
-      <td style="border:1px solid #000;padding:4px 6px">${lbl}</td>
-      <td style="border:1px solid #000;padding:4px 6px;min-height:20px"></td>
-      <td style="border:1px solid #000;padding:4px 6px"></td>
-      <td style="border:1px solid #000;padding:4px 6px" colspan="2"></td>
+      <td style="border:1px solid #000;padding:3px 5px;font-weight:bold">4</td>
+      <td style="border:1px solid #000;padding:3px 5px">
+        <strong>Part Number (P/N)</strong> <em>шифр (p/n):</em> ${a.pn||'—'}
+      </td>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000;padding:3px 5px;font-weight:bold">5</td>
+      <td style="border:1px solid #000;padding:3px 5px">
+        <strong>Serial Number (S/N):</strong> <em>серійний № (s/n):</em> ${a.sn||'—'}
+      </td>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000;padding:3px 5px;font-weight:bold">6</td>
+      <td style="border:1px solid #000;padding:3px 5px">
+        <strong>Year of Manufacture</strong> <em>рік випуску</em>
+      </td>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000;padding:3px 5px;font-weight:bold">7</td>
+      <td style="border:1px solid #000;padding:3px 5px">
+        <strong>Total Time Since New/Last Overhaul</strong><br>
+        <em>напрацювання з початку експлуатації/після останнього ремонту</em>
+      </td>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000;padding:3px 5px;font-weight:bold">8</td>
+      <td style="border:1px solid #000;padding:3px 5px">
+        <strong>Quantity:</strong> <em>кількість:</em> ${a.qty||''}
+      </td>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000;padding:3px 5px;font-weight:bold">9</td>
+      <td style="border:1px solid #000;padding:3px 5px">
+        <strong>Serial Documentation: Certificate of Conformity</strong><br>
+        <em>пономерна документація: сертифікат відповідності</em>
+      </td>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000;padding:3px 5px;font-weight:bold">10</td>
+      <td style="border:1px solid #000;padding:3px 5px">
+        <strong>Supplier/Customer:</strong> <em>постачальник\\замовник:</em> ${a.supplier||''}
+      </td>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000;padding:3px 5px;font-weight:bold">11</td>
+      <td colspan="3" style="border:1px solid #000;padding:3px 5px">
+        Name and Signature of Inspector ___________________________________
+        <em>прізвище та підпис особи що проводила перевірку</em>
+        <strong>${a.inspector||''}</strong>
+      </td>
+    </tr>
+
+    <!-- СЕКЦІЯ II -->
+    <tr>
+      <td colspan="4" style="border:1px solid #000;padding:4px 6px;font-weight:bold;text-align:center">
+        II. VISUAL INSPECTION <em style="font-weight:normal">(Візуальний огляд)</em>
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
+      <td style="border:1px solid #000;padding:3px 5px;font-weight:bold">
+        Direction of Inspection<br><em style="font-weight:normal">напрямок перевірки</em>
+      </td>
+      <td colspan="2" style="border:1px solid #000;padding:3px 5px;text-align:center;font-weight:bold">
+        Результати перевірки
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
+      <td style="border:1px solid #000;padding:3px 5px;font-size:9px">Data for Assessment<br><em>дані для оцінки</em></td>
+      <td style="border:1px solid #000;padding:3px 5px;font-size:9px">Meets Requirements<br><em>відповідає вимогам</em></td>
+    </tr>
+    ${[['12','Packaging','пакування'],['13','Preservation','консервація'],['14','External Condition','зовнішній стан'],['15','Completeness','комплектність'],['16','Expiry Date / Calibration Status','термін придатності/ калібрування'],['17','Sealing','пломбування']].map(([n,en,uk])=>`
+    <tr>
+      <td style="border:1px solid #000;padding:3px 5px;font-weight:bold">${n}</td>
+      <td style="border:1px solid #000;padding:3px 5px"><strong>${en}</strong><br><em>${uk}</em></td>
+      <td style="border:1px solid #000;padding:16px 5px"></td>
+      <td style="border:1px solid #000;padding:16px 5px"></td>
     </tr>`).join('')}
-    <!-- Section III -->
+
+    <!-- СЕКЦІЯ III -->
     <tr>
-      <td colspan="6" style="border:1px solid #000;padding:5px 8px;font-weight:bold;background:#f5f5f5">
-        ІІІ. INSTRUMENTAL CHECK (if necessary) <em>(Інструментальна перевірка)</em>
+      <td colspan="4" style="border:1px solid #000;padding:4px 6px;font-weight:bold;text-align:center">
+        III. INSTRUMENTAL CHECK (if necessary)<br>
+        <em style="font-weight:normal">Інструментальна перевірка (проводиться за необхідності)</em>
       </td>
     </tr>
     <tr>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold">18</td>
-      <td colspan="3" style="border:1px solid #000;padding:4px 6px;height:30px"></td>
-      <td colspan="2" style="border:1px solid #000;padding:4px 6px"></td>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
+      <td style="border:1px solid #000;padding:3px 5px;font-weight:bold">Inspection object<br><em style="font-weight:normal">напрямок перевірки</em></td>
+      <td style="border:1px solid #000;padding:3px 5px;font-weight:bold">Date<br><em style="font-weight:normal">дата</em></td>
+      <td style="border:1px solid #000;padding:3px 5px;font-weight:bold">Result<br><em style="font-weight:normal">висновок</em></td>
     </tr>
     <tr>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold">19</td>
-      <td colspan="5" style="border:1px solid #000;padding:4px 6px">
-        Inspector name and signature <em>(Ім'я, ПРІЗВИЩЕ та підпис особи що проводила перевірку)</em>
-        ____________________________________
+      <td style="border:1px solid #000;padding:3px 5px;font-weight:bold">18</td>
+      <td style="border:1px solid #000;padding:20px 5px;font-size:9px"><em>(що перевіряється та критерії відповідності)</em></td>
+      <td style="border:1px solid #000;padding:20px 5px"></td>
+      <td style="border:1px solid #000;padding:20px 5px"></td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000;padding:3px 5px;font-weight:bold">19</td>
+      <td colspan="3" style="border:1px solid #000;padding:3px 5px">
+        Inspector name and signature ___________________________________<br>
+        <em>Ім'я, ПРІЗВИЩЕ та підпис особи що проводила перевірку</em>
       </td>
     </tr>
-    <!-- Section IV -->
+
+    <!-- СЕКЦІЯ IV -->
     <tr>
-      <td colspan="6" style="border:1px solid #000;padding:5px 8px;font-weight:bold;background:#f5f5f5">
-        IV. STATUS DETERMINATION <em>(визначення статусу)</em>
-      </td>
-    </tr>
-    <tr>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold">20</td>
-      <td style="border:1px solid #000;padding:6px;text-align:center;${result==='+'?'background:#d4edda;font-weight:bold':''}" >SERVICEABLE (green) <em>придатний</em></td>
-      <td style="border:1px solid #000;padding:6px;text-align:center;${result==='-'?'background:#f8d7da;font-weight:bold':''}">UNSERVICEABLE (red) <em>несправний</em></td>
-      <td style="border:1px solid #000;padding:6px;text-align:center">REJECTED (red) <em>(забраковано)</em></td>
-      <td style="border:1px solid #000;padding:6px;text-align:center" colspan="2">UNDETERMINED (red) <em>(невизначено)</em></td>
-    </tr>
-    <tr>
-      <td style="border:1px solid #000;padding:4px 6px"></td>
-      <td style="border:1px solid #000;padding:16px 6px;font-size:10px">Name and Signature: <strong>${result==='+'?a.inspector:''}</strong> _______</td>
-      <td style="border:1px solid #000;padding:16px 6px;font-size:10px">Name and Signature: _______</td>
-      <td style="border:1px solid #000;padding:16px 6px;font-size:10px">Name and Signature: _______</td>
-      <td style="border:1px solid #000;padding:16px 6px;font-size:10px" colspan="2">Name and Signature: _______</td>
-    </tr>
-    <tr>
-      <td colspan="6" style="border:1px solid #000;padding:4px 8px;font-size:9px;font-style:italic">
-        By this signature, I certify the determination of airworthiness status for further use. Incoming inspection has been carried out in full compliance with the organization's procedures.
+      <td colspan="4" style="border:1px solid #000;padding:4px 6px;font-weight:bold;text-align:center">
+        IV. STATUS DETERMINATION <em style="font-weight:normal">(визначення статусу)</em>
       </td>
     </tr>
     <tr>
-      <td colspan="6" style="border:1px solid #000;padding:4px 8px;font-size:10px">
-        «▬» — Non-Conformities Detected; «Z» — Not Applicable / Not Required; «+» — Meets Standards <em>(відповідає стандартам)</em>
+      <td style="border:1px solid #000;padding:3px 5px;font-weight:bold">20</td>
+      <td style="border:1px solid #000;padding:6px;text-align:center;${svc?'background:#d4edda;font-weight:bold':''}">
+        SERVICEABLE (green)<br><em>придатний</em>
+      </td>
+      <td style="border:1px solid #000;padding:6px;text-align:center;${uns?'background:#f8d7da;font-weight:bold':''}">
+        UNSERVICEABLE (red)<br><em>несправний</em>
+      </td>
+      <td style="border:1px solid #000;padding:6px;text-align:center;${rej?'background:#f8d7da;font-weight:bold':''}">
+        REJECTED (red)<br><em>(забраковано)</em>
       </td>
     </tr>
-    <!-- Section 21 -->
     <tr>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold">21</td>
-      <td colspan="4" style="border:1px solid #000;padding:4px 6px;font-weight:bold">Description of Identified Non-Conformities <em>(Опис виявлених невідповідностей)</em>
-        ${a.notes ? '<br>' + a.notes : ''}</td>
-      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold">FULL NAME, SIGNATURE</td>
+      <td style="border:1px solid #000;padding:3px 5px"></td>
+      <td style="border:1px solid #000;padding:20px 5px;font-size:9px">
+        Name and Signature.<br><em>підпис, прізвище</em><br>${svc?'<strong>'+a.inspector+'</strong>':''}
+      </td>
+      <td style="border:1px solid #000;padding:20px 5px;font-size:9px">
+        Name and Signature.<br><em>підпис, прізвище</em>
+      </td>
+      <td style="border:1px solid #000;padding:20px 5px;font-size:9px">
+        Name and Signature.<br><em>підпис, прізвище</em>
+      </td>
     </tr>
-    ${Array(6).fill(0).map(()=>`<tr>
-      <td style="border:1px solid #000;padding:8px"></td>
-      <td colspan="4" style="border:1px solid #000;padding:8px"></td>
-      <td style="border:1px solid #000;padding:8px"></td>
+    <tr>
+      <td colspan="4" style="border:1px solid #000;padding:4px 6px;font-size:9px;font-style:italic">
+        By this signature, I certify the determination of airworthiness status for further use. Incoming inspection has been carried out in full compliance with the organization's procedures. I acknowledge the consequences of incorrect status determination and/or non-compliance with the incoming inspection procedure.
+      </td>
+    </tr>
+    <tr>
+      <td colspan="4" style="border:1px solid #000;padding:4px 6px;font-size:9px">
+        «▬» — Non-Conformities Detected (виявлені невідповідності); «Z» — Not Applicable / Not Required (не застосовано/не вимагається); «<strong>+</strong>» — Meets Standards (відповідає стандартам)
+      </td>
+    </tr>
+  </table>
+
+  <!-- РОЗРИВ СТОРІНКИ -->
+  <div style="page-break-after:always"></div>
+
+  <!-- СТОРІНКА 2: ТАБЛИЦЯ 21 -->
+  <table style="width:100%;border-collapse:collapse">
+    <tr>
+      <td style="border:1px solid #000;padding:4px 6px;width:25px;font-weight:bold">21</td>
+      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold;text-align:center">
+        Description of Identified Non-Conformities<br>
+        <em style="font-weight:normal">(Опис виявлених невідповідностей)</em>
+      </td>
+      <td style="border:1px solid #000;padding:4px 6px;font-weight:bold;text-align:center;width:160px">
+        FULL NAME, SIGNATURE<br><em style="font-weight:normal">(ПІБ, підпис)</em>
+      </td>
+    </tr>
+    ${Array(36).fill(0).map(()=>`
+    <tr>
+      <td style="border:1px solid #000;padding:10px 5px"></td>
+      <td style="border:1px solid #000;padding:10px 5px"></td>
+      <td style="border:1px solid #000;padding:10px 5px"></td>
     </tr>`).join('')}
   </table>
-  <div style="margin-top:8px;font-size:10px;color:#666;text-align:right">AVRONIS WMS · AMO-CiV-F.0015</div>
 </div>`;
+
   document.getElementById('print-content').innerHTML = html;
+  document.getElementById('print-modal-title').textContent = '🖨️ Акт ВК · ' + actN;
   openModal('modal-print');
 }
 
