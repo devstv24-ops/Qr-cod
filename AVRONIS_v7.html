@@ -3085,6 +3085,47 @@ async function startApp() {
       new URLSearchParams(window.location.search).get('mode') !== 'mobile') {
     await preloadDataIfEmpty();
     loadDashboard();
+    // Автосинхронізація кожні 5 хвилин у фоні
+    setInterval(async () => {
+      try {
+        const resp = await fetch(GAS_URL + '?action=getRequests', { method: 'GET', redirect: 'follow' });
+        const text = await resp.text();
+        let data;
+        try { data = JSON.parse(text); } catch(e) { return; }
+        if (!data || !Array.isArray(data.requests)) return;
+        const existing = await dbGetAll('requests');
+        const existingIds = new Set(existing.map(r => r.googleRowId).filter(Boolean));
+        let added = 0;
+        for (const row of data.requests) {
+          if (row.googleRowId && existingIds.has(row.googleRowId)) continue;
+          if (!row.executor && !row.aggregate && !(row.items && row.items.length)) continue;
+          await dbAdd('requests', {
+            executor: row.executor || '',
+            aggregate: row.aggregate || '',
+            project: row.project || '',
+            workplace: row.workplace || '',
+            note: row.type || 'Мобільна заявка',
+            items: row.items || [],
+            status: 'new',
+            createdAt: row.createdAt || new Date().toISOString(),
+            googleRowId: row.googleRowId || null,
+            source: 'mobile'
+          });
+          added++;
+        }
+        if (added > 0) {
+          // Оновлюємо тільки якщо користувач зараз на сторінці заявок або дашборді
+          const activePage = document.querySelector('.page.active');
+          if (activePage && (activePage.id === 'page-requests' || activePage.id === 'page-dashboard')) {
+            renderRequests();
+            loadDashboard();
+          }
+          showNotif(`🔄 Отримано ${added} нових заявок`);
+        }
+      } catch(e) {
+        // Тихо ігноруємо помилки автосинхронізації
+      }
+    }, 5 * 60 * 1000); // кожні 5 хвилин
   }
 }
 startApp();
