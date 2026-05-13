@@ -276,11 +276,16 @@ select option { background: var(--surface2); }
 @media print {
   #sidebar, #topbar, .no-print, .modal-close { display: none !important; }
   #main { margin: 0; }
-  body { background: #fff; color: #000; }
-  .card, .req-card, .modal { border: 1px solid #ccc; box-shadow: none; }
-  .modal-overlay { position: static !important; display: block !important; background: none; backdrop-filter: none; padding: 0; }
-  .modal { max-height: none; border-radius: 0; }
-  .print-doc { display: block !important; }
+  body { background: #fff !important; color: #000 !important; }
+  .modal-overlay { position: fixed !important; top: 0; left: 0; width: 100%; height: 100%; background: #fff !important; backdrop-filter: none; padding: 0; display: flex !important; align-items: flex-start; justify-content: center; }
+  .modal { max-height: none; border-radius: 0; background: #fff !important; color: #000 !important; box-shadow: none; width: 100%; max-width: 100%; }
+  .modal-body { padding: 0 !important; }
+  #print-content { background: #fff !important; color: #000 !important; }
+  #print-content * { background: transparent !important; color: #000 !important; }
+  #print-content table { border-collapse: collapse !important; }
+  #print-content td, #print-content th { border: 1px solid #000 !important; color: #000 !important; }
+  .modal-overlay:not(#modal-print) { display: none !important; }
+  #modal-print { display: flex !important; }
 }
 .print-doc { display: none; }
 
@@ -987,13 +992,13 @@ select option { background: var(--surface2); }
 
 <!-- PRINT DOCUMENT MODAL -->
 <div class="modal-overlay" id="modal-print">
-  <div class="modal" style="max-width:700px">
+  <div class="modal" style="max-width:780px">
     <div class="modal-hdr no-print">
-      <div class="modal-title">🖨️ Друк накладної</div>
+      <div class="modal-title" id="print-modal-title">🖨️ Друк акту ВК</div>
       <button class="modal-close" onclick="closeModal('modal-print')">✕</button>
     </div>
-    <div class="modal-body">
-      <div id="print-content"></div>
+    <div class="modal-body" style="padding:16px">
+      <div id="print-content" style="background:#fff;color:#000"></div>
     </div>
     <div class="modal-footer no-print">
       <button class="btn btn-ghost" onclick="closeModal('modal-print')">Закрити</button>
@@ -2205,6 +2210,7 @@ async function printRequest(id) {
       </div>
     </div>`;
   document.getElementById('print-content').innerHTML = html;
+  document.getElementById('print-modal-title').textContent = '🖨️ Накладна на видачу';
   openModal('modal-print');
 }
 
@@ -2640,6 +2646,7 @@ async function printAct(id) {
   <div style="margin-top:8px;font-size:10px;color:#666;text-align:right">AVRONIS WMS · AMO-CiV-F.0015</div>
 </div>`;
   document.getElementById('print-content').innerHTML = html;
+  document.getElementById('print-modal-title').textContent = '🖨️ Друк акту ВК · ' + actN;
   openModal('modal-print');
 }
 
