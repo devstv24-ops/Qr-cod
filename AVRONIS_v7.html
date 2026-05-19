@@ -706,6 +706,7 @@ select option { background: var(--surface2); }
           <button class="btn btn-success" onclick="exportBackup()">📥 Зберегти резервну копію (JSON)</button>
           <button class="btn btn-warn" onclick="document.getElementById('import-file').click()">📤 Відновити з копії</button>
           <input type="file" id="import-file" accept=".json" style="display:none" onchange="importBackup(this)">
+          <button class="btn btn-primary" onclick="syncActsToInventory().then(()=>{renderBackupStats();loadDashboard();})">🔄 Синхронізувати акти → склад</button>
         </div>
         <div class="card" style="background:var(--surface2)">
           <div style="font-size:12px;color:var(--text2)">
@@ -2537,96 +2538,55 @@ async function printAct(id) {
 <table style="width:100%;border-collapse:collapse">
   <tr>
     <td style="${SB}width:22px">1</td>
-    <td style="${SB}text-align:center;font-size:11px" colspan="3">INCOMING INSPECTION REPORT<br><em style="font-weight:normal;font-size:9px">(акт вхідного контролю)</em></td>
+    <td style="${SB}text-align:center;font-size:11px" colspan="2">INCOMING INSPECTION REPORT<br><em style="font-weight:normal;font-size:9px">(акт вхідного контролю)</em></td>
     <td style="${SB}width:30px">№</td>
     <td style="${S}width:90px"><strong>${actN}</strong></td>
-    <td style="${SB}width:40px">Date:<br><em style="font-weight:normal;font-size:9px">(дата)</em></td>
+    <td style="${SB}width:50px">Date:<br><em style="font-weight:normal;font-size:9px">(дата)</em></td>
     <td style="${S}width:90px">${a.date||''}</td>
-    <td style="${SB}width:90px;font-size:9px">AMO-CiV-F.0015</td>
+    <td style="${SB}width:100px;font-size:9px">AMO-CiV-F.0015</td>
   </tr>
-  <tr><td colspan="9" style="${SH}">I. Compliance Check Against Purchase Order<br><em style="font-weight:normal">(перевірка відповідності замовленню)</em></td></tr>
+  <tr><td colspan="8" style="${SH}">I. Compliance Check Against Purchase Order<br><em style="font-weight:normal">(перевірка відповідності замовленню)</em></td></tr>
   <tr>
     <td colspan="2" style="${S}"><strong>Purchase Order No.</strong> <em style="font-size:9px">(замовлення №)</em></td>
-    <td colspan="7" style="${S}">${a.po||''}</td>
+    <td colspan="6" style="${S}">${a.po||''}</td>
   </tr>
   <tr>
-    <td style="${SB}width:22px">2</td>
-    <td style="${S}width:180px"><strong>Accompanying Documentation:</strong><br><em style="font-size:9px">Супровідна документація</em></td>
-    <td colspan="5" style="${S}">${a.docs||''}</td>
-    <td style="${S}width:110px;font-size:9px"><strong>Non-Conformity Detected</strong><br><em>виявлено невідповідність</em></td>
-    <td style="${SC}width:60px"></td>
-  </tr>
-  <tr>
-    <td style="${SB}">3</td>
-    <td style="${S}"><strong>Item Name:</strong><br><em style="font-size:9px">найменування</em></td>
-    <td colspan="5" style="${S}"><strong>${a.name||''}</strong></td>
-    <td style="${S}font-size:9px">N/A</td>
+    <td style="${SB}">2</td>
+    <td style="${S}"><strong>Accompanying Documentation:</strong><br><em style="font-size:9px">Супровідна документація</em></td>
+    <td colspan="4" style="${S}">${a.docs||''}</td>
+    <td style="${S}font-size:9px"><strong>Non-Conformity Detected</strong><br><em>виявлено невідповідність</em></td>
     <td style="${SC}"></td>
   </tr>
+  ${[
+    ['3','Item Name:<br><em style="font-size:9px">найменування</em>', `<strong>${a.name||''}</strong>`],
+    ['4','Part Number (P/N)<br><em style="font-size:9px">шифр (p/n):</em>', a.pn||'—'],
+    ['5','Serial Number (S/N):<br><em style="font-size:9px">серійний № (s/n):</em>', a.sn||'—'],
+    ['6','Year of Manufacture<br><em style="font-size:9px">рік випуску</em>', ''],
+    ['7','Total Time Since New/Last Overhaul<br><em style="font-size:9px">напрацювання з початку експлуатації/після останнього ремонту</em>', ''],
+    ['8','Quantity:<br><em style="font-size:9px">кількість:</em>', a.qty||''],
+    ['9','Serial Documentation: Certificate of Conformity<br><em style="font-size:9px">пономерна документація: сертифікат відповідності</em>', ''],
+    ['10','Supplier/Customer:<br><em style="font-size:9px">постачальник\\замовник:</em>', a.supplier||''],
+  ].map(([n,lbl,val])=>`
   <tr>
-    <td style="${SB}">4</td>
-    <td style="${S}"><strong>Part Number (P/N)</strong><br><em style="font-size:9px">шифр (p/n):</em></td>
-    <td colspan="5" style="${S}">${a.pn||'—'}</td>
-    <td style="${S}font-size:9px">N/A</td>
-    <td style="${SC}"></td>
-  </tr>
-  <tr>
-    <td style="${SB}">5</td>
-    <td style="${S}"><strong>Serial Number (S/N):</strong><br><em style="font-size:9px">серійний № (s/n):</em></td>
-    <td colspan="5" style="${S}">${a.sn||'Z'}</td>
-    <td style="${S}font-size:9px">N/A</td>
-    <td style="${SC}"></td>
-  </tr>
-  <tr>
-    <td style="${SB}">6</td>
-    <td style="${S}"><strong>Year of Manufacture</strong><br><em style="font-size:9px">рік випуску</em></td>
-    <td colspan="5" style="${S}"></td>
-    <td style="${S}font-size:9px">N/A</td>
-    <td style="${SC}"></td>
-  </tr>
-  <tr>
-    <td style="${SB}">7</td>
-    <td style="${S}"><strong>Total Time Since New/Last Overhaul</strong><br><em style="font-size:9px">напрацювання з початку експлуатації/після останнього ремонту</em></td>
-    <td colspan="5" style="${S}"></td>
-    <td style="${S}font-size:9px">N/A</td>
-    <td style="${SC}"></td>
-  </tr>
-  <tr>
-    <td style="${SB}">8</td>
-    <td style="${S}"><strong>Quantity:</strong><br><em style="font-size:9px">кількість:</em></td>
-    <td colspan="5" style="${S}">${a.qty||''}</td>
-    <td style="${S}font-size:9px">N/A</td>
-    <td style="${SC}"></td>
-  </tr>
-  <tr>
-    <td style="${SB}">9</td>
-    <td style="${S}"><strong>Serial Documentation: Certificate of Conformity</strong><br><em style="font-size:9px">пономерна документація: сертифікат відповідності</em></td>
-    <td colspan="5" style="${S}"></td>
-    <td style="${S}font-size:9px">N/A</td>
-    <td style="${SC}"></td>
-  </tr>
-  <tr>
-    <td style="${SB}">10</td>
-    <td style="${S}"><strong>Supplier/Customer:</strong><br><em style="font-size:9px">постачальник\замовник:</em></td>
-    <td colspan="5" style="${S}">${a.supplier||''}</td>
-    <td style="${S}font-size:9px">N/A</td>
-    <td style="${SC}"></td>
-  </tr>
+    <td style="${SB}">${n}</td>
+    <td style="${S}">${lbl}</td>
+    <td colspan="4" style="${S}">${val}</td>
+    <td colspan="2" style="${S}"></td>
+  </tr>`).join('')}
   <tr>
     <td style="${SB}">11</td>
-    <td colspan="8" style="${S}">
+    <td colspan="7" style="${S}">
       <strong>Name and Signature of Inspector</strong> ___________________________________
       <em style="font-size:9px">прізвище та підпис особи що проводила перевірку</em>
       &nbsp;&nbsp;&nbsp;<strong>${a.inspector||''}</strong>
     </td>
   </tr>
 
-  <tr><td colspan="9" style="${SH}">II. VISUAL INSPECTION <em style="font-weight:normal">(Візуальний огляд)</em></td></tr>
+  <tr><td colspan="8" style="${SH}">II. VISUAL INSPECTION <em style="font-weight:normal">(Візуальний огляд)</em></td></tr>
   <tr>
     <td style="${S}"></td>
     <td style="${SB}">Direction of Inspection<br><em style="font-weight:normal;font-size:9px">напрямок перевірки</em></td>
     <td colspan="6" style="${SBC}">Результати перевірки</td>
-    <td style="${S}"></td>
   </tr>
   <tr>
     <td style="${S}"></td>
@@ -2634,7 +2594,6 @@ async function printAct(id) {
     <td colspan="2" style="${SC}font-size:9px">Data for Assessment<br><em>дані для оцінки</em></td>
     <td colspan="2" style="${SC}font-size:9px">Meets Requirements<br><em>відповідає вимогам</em></td>
     <td colspan="2" style="${SC}font-size:9px">Non-Conformity Detected<br><em>виявлено невідповідність</em></td>
-    <td style="${S}"></td>
   </tr>
   ${[['12','Packaging','пакування'],['13','Preservation','консервація'],['14','External Condition','зовнішній стан'],['15','Completeness','комплектність'],['16','Expiry Date / Calibration Status','термін придатності/ калібрування'],['17','Sealing','пломбування']].map(([n,en,uk])=>`
   <tr>
@@ -2642,54 +2601,53 @@ async function printAct(id) {
     <td style="${S}"><strong>${en}</strong><br><em style="font-size:9px">${uk}</em></td>
     <td colspan="2" style="${SC}height:22px"></td>
     <td colspan="2" style="${SC}"></td>
-    <td colspan="2" style="${SC}font-size:9px">N/A</td>
-    <td style="${S}"></td>
+    <td colspan="2" style="${SC}"></td>
   </tr>`).join('')}
 
-  <tr><td colspan="9" style="${SH}">III. INSTRUMENTAL CHECK (if necessary)<br><em style="font-weight:normal">Інструментальна перевірка (проводиться за необхідності)</em></td></tr>
+  <tr><td colspan="8" style="${SH}">III. INSTRUMENTAL CHECK (if necessary)<br><em style="font-weight:normal">Інструментальна перевірка (проводиться за необхідності)</em></td></tr>
   <tr>
     <td style="${S}"></td>
     <td style="${SB}">Inspection object<br><em style="font-weight:normal;font-size:9px">напрямок перевірки</em></td>
     <td colspan="3" style="${SBC}">Date<br><em style="font-weight:normal;font-size:9px">дата</em></td>
-    <td colspan="4" style="${SBC}">Result<br><em style="font-weight:normal;font-size:9px">висновок</em></td>
+    <td colspan="3" style="${SBC}">Result<br><em style="font-weight:normal;font-size:9px">висновок</em></td>
   </tr>
   <tr>
     <td style="${SB}">18</td>
     <td style="${S}height:30px;font-size:9px"><em>(що перевіряється та критерії відповідності)</em></td>
     <td colspan="3" style="${SC}height:30px"></td>
-    <td colspan="4" style="${SC}"></td>
+    <td colspan="3" style="${SC}"></td>
   </tr>
   <tr>
     <td style="${SB}">19</td>
-    <td colspan="8" style="${S}">
+    <td colspan="7" style="${S}">
       Inspector name and signature ___________________________________
       <em style="font-size:9px">Ім'я, ПРІЗВИЩЕ та підпис особи що проводила перевірку</em>
       &nbsp;&nbsp;&nbsp;<strong>${a.inspector||''}</strong>
     </td>
   </tr>
 
-  <tr><td colspan="9" style="${SH}">IV. STATUS DETERMINATION <em style="font-weight:normal">(визначення статусу)</em></td></tr>
+  <tr><td colspan="8" style="${SH}">IV. STATUS DETERMINATION <em style="font-weight:normal">(визначення статусу)</em></td></tr>
   <tr>
     <td style="${SB}">20</td>
     <td colspan="2" style="${SC}${svc?'background:#d4edda;font-weight:bold;':''}">SERVICEABLE (green)<br><em style="font-size:9px">придатний</em></td>
     <td colspan="2" style="${SC}${uns?'background:#f8d7da;font-weight:bold;':''}">UNSERVICEABLE (red)<br><em style="font-size:9px">несправний</em></td>
     <td colspan="2" style="${SC}${rej?'background:#f8d7da;font-weight:bold;':''}">REJECTED (red)<br><em style="font-size:9px">(забраковано)</em></td>
-    <td colspan="2" style="${SC}">UNDETERMINED (red)<br><em style="font-size:9px">(невизначено)</em></td>
+    <td style="${SC}">UNDETERMINED (red)<br><em style="font-size:9px">(невизначено)</em></td>
   </tr>
   <tr>
     <td style="${S}"></td>
     <td colspan="2" style="${S}height:35px;font-size:9px">Name and Signature.<br><em>підпис, прізвище</em><br>${svc?'<strong>'+a.inspector+'</strong>':''}</td>
     <td colspan="2" style="${S}height:35px;font-size:9px">Name and Signature.<br><em>підпис, прізвище</em></td>
     <td colspan="2" style="${S}height:35px;font-size:9px">Name and Signature.<br><em>підпис, прізвище</em></td>
-    <td colspan="2" style="${S}height:35px;font-size:9px">Name and Signature.<br><em>підпис, прізвище</em></td>
+    <td style="${S}height:35px;font-size:9px">Name and Signature.<br><em>підпис, прізвище</em></td>
   </tr>
   <tr>
-    <td colspan="9" style="${S}font-size:9px;font-style:italic">
+    <td colspan="8" style="${S}font-size:9px;font-style:italic">
       By this signature, I certify the determination of airworthiness status for further use. Incoming inspection has been carried out in full compliance with the organization's procedures. I acknowledge the consequences of incorrect status determination and/or non-compliance with the incoming inspection procedure.
     </td>
   </tr>
   <tr>
-    <td colspan="9" style="${S}font-size:9px">
+    <td colspan="8" style="${S}font-size:9px">
       «▬»-Non-Conformities Detected (виявлені невідповідності); «<strong>Z</strong>»- Not Applicable / Not Required (не застосовано/не вимагається); «<strong>+</strong>» — Meets Standards (відповідає стандартам)
     </td>
   </tr>
@@ -2716,6 +2674,7 @@ async function printAct(id) {
   document.getElementById('print-modal-title').textContent = '🖨️ Акт ВК · ' + actN;
   openModal('modal-print');
 }
+
 
 // ===================== QR =====================
 function renderQR() {
@@ -2793,6 +2752,19 @@ function renderMobileForm(step, data) {
       <div class="form-row"><div class="form-group"><label>№ Агрегату</label><input type="text" id="mob-agg" placeholder="КАУ-30Б №12345"></div></div>
       <div class="form-row"><div class="form-group"><label>№ Проекту</label><input type="text" id="mob-proj" placeholder="Пр-001"></div></div>
       <div class="form-row"><div class="form-group"><label>Робоче місце</label><input type="text" id="mob-wp" placeholder="Цех №2"></div></div>
+      <div class="form-row"><div class="form-group"><label>Ділянка</label>
+        <select id="mob-area" style="width:100%;background:var(--surface2);border:2px solid var(--border);border-radius:10px;padding:12px;color:var(--text1);font-size:15px">
+          <option value="">— Оберіть ділянку —</option>
+          <option>General-purpose tools</option>
+          <option>Warehouse and incoming inspection area</option>
+          <option>Component Assembly Area</option>
+          <option>Component Cleaning Area</option>
+          <option>Component Inspection and Electronic Repair Area</option>
+          <option>Component Testing Area</option>
+          <option>Mechanical Disassembly and Repair Area</option>
+          <option>Packing and Finished Goods Storage Area</option>
+        </select>
+      </div></div>
       <div style="font-size:13px;font-weight:600;margin:12px 0 10px">Оберіть агрегат:</div>
       ${Object.entries(KITS).map(([k,v])=>`
         <button class="qr-choice-btn" onclick="submitMobileKit('${k}')">
@@ -2830,9 +2802,11 @@ async function submitMobileKit(kitKey) {
   const agg = document.getElementById('mob-agg')?.value.trim() || '';
   const proj = document.getElementById('mob-proj')?.value.trim() || '';
   const wp = document.getElementById('mob-wp')?.value.trim() || '';
+  const area = document.getElementById('mob-area')?.value || '';
   const kit = KITS[kitKey];
   const req = {
-    executor: exec, aggregate: agg||kit.label, project: proj, workplace: wp,
+    executor: exec, aggregate: agg||kit.label, project: proj,
+    workplace: wp + (area ? ' / ' + area : ''),
     items: kit.items.map(i=>({...i})), status: 'new', createdAt: now(),
     note: `Комплект 100% заміни ${kit.label} (з QR)`
   };
@@ -3165,6 +3139,48 @@ async function preloadDataIfEmpty() {
     }
     showNotif(`✅ Завантажено ${PRELOADED_INVENTORY.length} позицій на склад`);
   }
+  // Синхронізуємо придатні акти на склад
+  await syncActsToInventory();
+}
+
+async function syncActsToInventory() {
+  const acts = await dbGetAll('acts');
+  const inv = await dbGetAll('inventory');
+  // Індекс існуючих позицій по actNum
+  const actNumsOnStock = new Set(inv.map(i => i.actNum).filter(Boolean));
+  let added = 0;
+  for (const a of acts) {
+    if (a.result !== '+') continue; // тільки придатні
+    if (actNumsOnStock.has(a.actNum)) continue; // вже є
+    // Пропускаємо якщо вже є по pn+name
+    const already = inv.find(i =>
+      (a.pn && i.pn && i.pn.toLowerCase().trim() === a.pn.toLowerCase().trim()) ||
+      (!a.pn && i.name && i.name.toLowerCase().trim() === (a.name||'').toLowerCase().trim() && i.category === a.category)
+    );
+    if (already) {
+      // Оновлюємо кількість
+      const qtyStr = String(a.qty||'1').replace(/[^\d.,]/g,'');
+      const qtyNum = parseFloat(qtyStr.replace(',','.')) || 1;
+      already.qty = (parseFloat(already.qty)||0) + qtyNum;
+      if (!already.actNum) already.actNum = a.actNum;
+      await dbPut('inventory', already);
+      actNumsOnStock.add(a.actNum);
+      added++;
+      continue;
+    }
+    const qtyStr = String(a.qty||'1').replace(/[^\d.,]/g,'');
+    const qtyNum = parseFloat(qtyStr.replace(',','.')) || 1;
+    const unit = String(a.qty||'').includes('м') ? 'м' : (String(a.qty||'').includes('к-т') ? 'к-т' : 'шт');
+    await dbAdd('inventory', {
+      name: a.name, pn: a.pn||'', sn: a.sn||'',
+      category: a.category, qty: qtyNum, minQty: 0,
+      unit, location: a.storage||'', notes: `Акт ${a.actNum}`,
+      createdAt: a.date||now(), source: 'act', actNum: a.actNum
+    });
+    actNumsOnStock.add(a.actNum);
+    added++;
+  }
+  if (added > 0) showNotif(`✅ На склад додано ${added} позицій з актів ВК`);
 }
 </script>
 </body>
