@@ -2618,8 +2618,8 @@ async function printAct(id) {
   ].map(([n,lbl,val])=>`
   <tr>
     <td style="${SB}">${n}</td>
-    <td style="${S}">${lbl}</td>
-    <td colspan="6" style="${S}">${val}</td>
+    <td style="${S}border-right:none">${lbl}</td>
+    <td colspan="6" style="${S}border-left:none">${val}</td>
   </tr>`).join('')}
   <tr>
     <td style="${SB}">11</td>
