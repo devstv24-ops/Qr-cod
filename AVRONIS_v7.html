@@ -2976,7 +2976,9 @@ document.addEventListener('keydown', e => {
 
 // Close modals on overlay click
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay && overlay.id !== 'modal-act') overlay.classList.remove('open');
+  });
 });
 
 // Warehouse/manual proceed buttons — injected into step views
