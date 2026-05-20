@@ -2607,19 +2607,19 @@ async function printAct(id) {
     <td style="${S}font-size:9px"><strong>Non-Conformity Detected</strong><br><em>виявлено невідповідність</em></td>
   </tr>
   ${[
-    ['3','Item Name:<br><em style="font-size:9px">найменування</em>', `<strong>${a.name||''}</strong>`],
-    ['4','Part Number (P/N)<br><em style="font-size:9px">шифр (p/n):</em>', a.pn||'—'],
-    ['5','Serial Number (S/N):<br><em style="font-size:9px">серійний № (s/n):</em>', a.sn||'—'],
-    ['6','Year of Manufacture<br><em style="font-size:9px">рік випуску</em>', ''],
-    ['7','Total Time Since New/Last Overhaul<br><em style="font-size:9px">напрацювання з початку експлуатації/після останнього ремонту</em>', ''],
-    ['8','Quantity:<br><em style="font-size:9px">кількість:</em>', a.qty||''],
-    ['9','Serial Documentation: Certificate of Conformity<br><em style="font-size:9px">пономерна документація: сертифікат відповідності</em>', ''],
-    ['10','Supplier/Customer:<br><em style="font-size:9px">постачальник\\замовник:</em>', a.supplier||''],
-  ].map(([n,lbl,val])=>`
-  <tr>
-    <td style="${SB}">${n}</td>
-    <td style="${S}border-right:none">${lbl}</td>
-    <td colspan="6" style="${S}border-left:none">${val}</td>
+    ['3','Item Name:<br><em style="font-size:9px">найменування</em>', `<strong>${a.name||''}</strong>`, false],
+    ['4','Part Number (P/N)<br><em style="font-size:9px">шифр (p/n):</em>', a.pn||'—', false],
+    ['5','Serial Number (S/N):<br><em style="font-size:9px">серійний № (s/n):</em>', a.sn||'—', true],
+    ['6','Year of Manufacture<br><em style="font-size:9px">рік випуску</em>', '', false],
+    ['7','Total Time Since New/Last Overhaul<br><em style="font-size:9px">напрацювання з початку експлуатації/після останнього ремонту</em>', '', true],
+    ['8','Quantity:<br><em style="font-size:9px">кількість:</em>', a.qty||'', false],
+    ['9','Serial Documentation: Certificate of Conformity<br><em style="font-size:9px">пономерна документація: сертифікат відповідності</em>', '', true],
+    ['10','Supplier/Customer:<br><em style="font-size:9px">постачальник\\замовник:</em>', a.supplier||'', false],
+  ].map(([n,lbl,val,thick])=>`
+  <tr style="${thick?'border-top:2px solid #000;':''}">
+    <td style="${SB}${thick?'border-top:2px solid #000;':''}">${n}</td>
+    <td style="${S}border-right:none${thick?';border-top:2px solid #000':''}">${lbl}</td>
+    <td colspan="6" style="${S}border-left:none${thick?';border-top:2px solid #000':''}">${val}</td>
   </tr>`).join('')}
   <tr>
     <td style="${SB}">11</td>
