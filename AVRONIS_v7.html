@@ -1076,15 +1076,18 @@ select option { background: var(--surface2); }
       <div class="form-row">
         <div class="form-group full">
           <label>Результат вхідного контролю *</label>
-          <div style="display:flex;gap:10px;margin-top:4px">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border:1px solid var(--border);border-radius:6px;flex:1;font-size:13px" id="res-btn-plus">
+          <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px" id="res-btn-plus">
               <input type="radio" name="act-result-radio" value="+" checked onchange="updateResBtn()"> <span style="color:var(--green);font-weight:700">+</span> Придатний (SERVICEABLE)
             </label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border:1px solid var(--border);border-radius:6px;flex:1;font-size:13px" id="res-btn-minus">
-              <input type="radio" name="act-result-radio" value="-" onchange="updateResBtn()"> <span style="color:var(--red);font-weight:700">−</span> Непридатний (UNSERVICEABLE)
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px" id="res-btn-minus">
+              <input type="radio" name="act-result-radio" value="-" onchange="updateResBtn()"> <span style="color:var(--red);font-weight:700">−</span> Несправний (UNSERVICEABLE)
             </label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border:1px solid var(--border);border-radius:6px;flex:1;font-size:13px" id="res-btn-z">
-              <input type="radio" name="act-result-radio" value="Z" onchange="updateResBtn()"> <span style="color:var(--orange);font-weight:700">Z</span> Не застосовано
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px" id="res-btn-z">
+              <input type="radio" name="act-result-radio" value="Z" onchange="updateResBtn()"> <span style="color:var(--red);font-weight:700">Z</span> Забраковано (REJECTED)
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px" id="res-btn-u">
+              <input type="radio" name="act-result-radio" value="U" onchange="updateResBtn()"> <span style="color:var(--red);font-weight:700">?</span> Невизначено (UNDETERMINED)
             </label>
           </div>
         </div>
@@ -2308,7 +2311,7 @@ async function renderActs() {
     <td class="td-mono" style="font-size:11px">${a.pn||'—'}</td>
     <td class="td-mono" style="font-size:11px">${a.sn||'—'}</td>
     <td>${a.qty}</td>
-    <td><span class="badge ${a.result==='+'?'badge-ok':a.result==='-'?'badge-danger':'badge-warn'}">${a.result==='+'?'+ Придатний':a.result==='-'?'− Непридатний':'Z Умовно'}</span></td>
+    <td><span class="badge ${a.result==='+'?'badge-ok':a.result==='-'||a.result==='Z'||a.result==='U'?'badge-danger':'badge-warn'}">${a.result==='+'?'+ Придатний':a.result==='-'?'− Несправний':a.result==='Z'?'Z Забраковано':a.result==='U'?'? Невизначено':'—'}</span></td>
     <td style="font-size:12px">${a.inspector||'—'}</td>
     <td style="font-size:11px;color:var(--text2)">${a.supplier||'—'}</td>
     <td>
@@ -2350,10 +2353,14 @@ function onActCategoryChange() {
 
 function updateResBtn() {
   const val = document.querySelector('input[name="act-result-radio"]:checked')?.value;
-  ['plus','minus','z'].forEach(k => document.getElementById('res-btn-'+k)?.style && (document.getElementById('res-btn-'+k).style.borderColor = 'var(--border)'));
+  ['plus','minus','z','u'].forEach(k => {
+    const el = document.getElementById('res-btn-'+k);
+    if (el) el.style.borderColor = 'var(--border)';
+  });
   if (val === '+') document.getElementById('res-btn-plus').style.borderColor = 'var(--green)';
   else if (val === '-') document.getElementById('res-btn-minus').style.borderColor = 'var(--red)';
-  else if (val === 'Z') document.getElementById('res-btn-z').style.borderColor = 'var(--orange)';
+  else if (val === 'Z') document.getElementById('res-btn-z').style.borderColor = 'var(--red)';
+  else if (val === 'U') { const el = document.getElementById('res-btn-u'); if(el) el.style.borderColor = 'var(--red)'; }
 }
 
 async function getNextActNum() {
@@ -2455,14 +2462,14 @@ async function saveAct() {
     date: document.getElementById('act-date').value,
     name, category: cat,
     pn: document.getElementById('act-pn').value.trim(),
-    sn: document.getElementById('act-sn').value.trim(),
-    qty: document.getElementById('act-qty').value.trim() || '1',
+    sn: document.getElementById('act-sn')?.value.trim() || '',
+    qty: document.getElementById('act-qty')?.value.trim() || '1',
     result,
-    inspector: document.getElementById('act-inspector').value.trim(),
-    supplier: document.getElementById('act-supplier').value.trim(),
-    docs: document.getElementById('act-docs').value.trim(),
-    notes: document.getElementById('act-notes').value.trim(),
-    po: document.getElementById('act-po').value.trim(),
+    inspector: document.getElementById('act-inspector')?.value.trim() || '',
+    supplier: document.getElementById('act-supplier')?.value.trim() || '',
+    docs: document.getElementById('act-docs')?.value.trim() || '',
+    notes: document.getElementById('act-notes')?.value.trim() || '',
+    po: document.getElementById('act-po')?.value.trim() || '',
     toolMarking, measMarking,
     createdAt: now()
   };
