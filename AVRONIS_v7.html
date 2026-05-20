@@ -543,11 +543,16 @@ select option { background: var(--surface2); }
           </div>
           <select id="acts-filter-cat" onchange="renderActs()" style="width:auto;min-width:160px">
             <option value="">Всі категорії</option>
-            <option>Інструмент</option>
-            <option>Вимірювальний інструмент</option>
-            <option>Комплектуючі для ТО</option>
+            <option>Матеріали</option>
             <option>Комплектуючі</option>
+            <option>Інструмент</option>
             <option>Обладнання</option>
+            <option>Вимірювальний інструмент</option>
+            <option>Тара</option>
+            <option>Компонент в ТО</option>
+            <option>Комплектуючі для ТО</option>
+            <option>Агрегат</option>
+            <option>Матеріали для ТО</option>
           </select>
           <select id="acts-filter-result" onchange="renderActs()" style="width:auto;min-width:130px">
             <option value="">Всі результати</option>
@@ -1039,14 +1044,16 @@ select option { background: var(--surface2); }
           <label>Вид *</label>
           <select id="act-category" onchange="onActCategoryChange()">
             <option value="">— Оберіть вид —</option>
-            <option>Інструмент</option>
-            <option>Вимірювальний інструмент</option>
-            <option>Комплектуючі для ТО</option>
-            <option>Комплектуючі</option>
-            <option>Компонент в ТО</option>
             <option>Матеріали</option>
+            <option>Комплектуючі</option>
+            <option>Інструмент</option>
             <option>Обладнання</option>
+            <option>Вимірювальний інструмент</option>
             <option>Тара</option>
+            <option>Компонент в ТО</option>
+            <option>Комплектуючі для ТО</option>
+            <option>Агрегат</option>
+            <option>Матеріали для ТО</option>
           </select>
         </div>
       </div>
@@ -2512,13 +2519,40 @@ async function saveAct() {
     } else {
       showNotif('Акт збережено');
     }
-    // Маркування для інструменту
+    // Маркування для інструменту — додаємо реальний запис
     if (toolMarking) {
+      const newTool = {
+        num: String(PRELOADED_TOOLS.length + 1),
+        name: name,
+        pn: obj.pn || '',
+        type: cat === 'Обладнання' ? 'Стандартний' : 'Стандартний',
+        actNum: actNum,
+        marking: toolMarking,
+        location: 'Warehouse and incoming inspection area',
+        responsible: obj.inspector || '',
+        markingStatus: 'Очікує нанесення'
+      };
+      PRELOADED_TOOLS.push(newTool);
+      // Зберігаємо в tools_edits щоб запис не зник після перезавантаження
+      await dbAdd('tools_edits', { ...newTool, id: undefined, createdAt: now() });
       toolsData = null;
-      showNotif(`✅ Акт збережено. Маркування: ${toolMarking}`);
+      showNotif(`✅ Акт збережено. Інструмент додано з маркуванням: ${toolMarking}`);
     }
     if (measMarking) {
-      showNotif(`✅ Акт збережено. Маркування: ${measMarking}`);
+      const newMeas = {
+        num: String(PRELOADED_MEASURING.length + 1),
+        name: name,
+        pn: obj.pn || '',
+        sn: measMarking,
+        range: '—',
+        period: '12 міс.',
+        lastCal: '',
+        nextCal: '',
+        location: 'Warehouse and incoming inspection area',
+        status: 'Received – Calibration Pending'
+      };
+      PRELOADED_MEASURING.push(newMeas);
+      showNotif(`✅ Акт збережено. Вимірювальний інструмент додано: ${measMarking}`);
     }
   }
 
@@ -2999,8 +3033,22 @@ async function getToolsData() {
   if (toolsData) return toolsData;
   const stored = await dbGetAll('tools_edits');
   const edits = {};
-  stored.forEach(e => { edits[e.marking] = e; });
-  toolsData = PRELOADED_TOOLS.map(t => ({...t, ...(edits[t.marking] || {})}));
+  const newTools = [];
+  stored.forEach(e => {
+    if (e.marking && PRELOADED_TOOLS.some(t => t.marking === e.marking)) {
+      // Це редагування існуючого
+      edits[e.marking] = e;
+    } else if (e.actNum && !PRELOADED_TOOLS.some(t => t.actNum === e.actNum && t.name === e.name)) {
+      // Це нова позиція додана з акту
+      newTools.push(e);
+    } else if (e.marking) {
+      edits[e.marking] = e;
+    }
+  });
+  toolsData = [
+    ...PRELOADED_TOOLS.map(t => ({...t, ...(edits[t.marking] || {})})),
+    ...newTools
+  ];
   return toolsData;
 }
 
