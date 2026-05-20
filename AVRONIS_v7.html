@@ -1238,6 +1238,32 @@ async function sendToSheets(req) {
   }
 }
 
+// Автоматична синхронізація складу в Google Sheets
+async function pushInventoryToSheets() {
+  try {
+    const inventory = await dbGetAll('inventory');
+    const rows = inventory
+      .filter(i => parseFloat(i.qty) > 0)
+      .map(i => ({
+        name: i.name || '',
+        pn: i.pn || '',
+        category: i.category || '',
+        qty: parseFloat(i.qty) || 0,
+        unit: i.unit || 'шт',
+        location: i.location || '',
+        notes: i.notes || ''
+      }));
+    await fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'updateInventory', items: rows })
+    });
+  } catch(e) {
+    console.warn('pushInventoryToSheets error:', e);
+  }
+}
+
 async function syncRequestsFromGoogle() {
   const btn = document.getElementById('sync-btn');
   const status = document.getElementById('sync-status');
@@ -1812,6 +1838,7 @@ async function saveItem() {
   else { obj.createdAt = now(); await dbAdd('inventory', obj); showNotif('Позицію додано'); }
   closeModal('modal-item');
   renderInventory();
+  pushInventoryToSheets();
   loadDashboard();
 }
 
@@ -2152,7 +2179,8 @@ async function confirmIssue() {
   showNotif('✅ Видано! Залишки списано зі складу.');
   renderRequests();
   loadDashboard();
-
+  // Автоматично оновлюємо склад в Google Sheets
+  pushInventoryToSheets();
   // Offer to print
   setTimeout(()=>printRequest(req.id), 300);
 }
@@ -2488,8 +2516,34 @@ async function saveAct() {
 
   closeModal('modal-act');
   renderActs();
+  // Автоматично оновлюємо склад в Google Sheets
+  if (result === '+') pushInventoryToSheets();
   // Open print after save for new acts
   if (!editId) setTimeout(() => printAct(savedId), 400);
+}
+
+// Автоматично надсилає весь склад в Google Sheets після змін
+async function pushInventoryToSheets() {
+  try {
+    const inv = await dbGetAll('inventory');
+    const items = inv.map(i => ({
+      name: i.name || '',
+      pn: i.pn || '',
+      category: i.category || '',
+      qty: i.qty || 0,
+      unit: i.unit || 'шт',
+      location: i.location || '',
+      notes: i.notes || ''
+    }));
+    await fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'updateInventory', items })
+    });
+  } catch(e) {
+    console.warn('Inventory sync error:', e);
+  }
 }
 
 async function deleteAct(id) {
@@ -3175,6 +3229,8 @@ async function syncActsToInventory() {
     added++;
   }
   if (added > 0) showNotif(`✅ На склад додано ${added} позицій з актів ВК`);
+  // Оновлюємо Google Sheets
+  await pushInventoryToSheets();
 }
 </script>
 </body>
