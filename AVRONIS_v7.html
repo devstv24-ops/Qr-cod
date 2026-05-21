@@ -791,6 +791,22 @@ select option { background: var(--surface2); }
   </div>
 </div>
 
+
+<!-- INVENTORY RECEIPTS DETAIL MODAL -->
+<div class="modal-overlay" id="modal-inv-detail">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-hdr">
+      <div class="modal-title" id="inv-detail-title">Деталі надходжень</div>
+      <button class="modal-close" onclick="closeModal('modal-inv-detail')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="inv-detail-summary" style="margin-bottom:16px;padding:12px;background:var(--surface2);border-radius:8px;font-size:13px"></div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--text2)">ІСТОРІЯ НАДХОДЖЕНЬ</div>
+      <div class="tbl-wrap"><table><thead><tr><th>№ Акту ВК</th><th>Дата</th><th>К-сть</th><th>Постачальник</th><th>Документ</th></tr></thead><tbody id="inv-detail-tbody"></tbody></table></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-inv-detail')">Закрити</button></div>
+  </div>
+</div>
 <!-- NEW REQUEST MODAL -->
 <div class="modal-overlay" id="modal-request">
   <div class="modal">
@@ -1767,15 +1783,46 @@ async function renderInventory() {
   const search = document.getElementById('inv-search').value.toLowerCase();
   const cat = document.getElementById('inv-filter-cat').value;
 
+  // Агрегуємо: один рядок на pn+category (об'єднуємо дублікати)
+  const aggMap = new Map();
+  for (const item of items) {
+    const key = (item.pn||'').trim().toLowerCase() + '|||' + (item.category||'');
+    if (!key || key === '|||') {
+      // Позиції без pn — зберігаємо окремо по id
+      aggMap.set('__id__' + item.id, {...item, _ids: [item.id], _sources: []});
+      continue;
+    }
+    if (aggMap.has(key)) {
+      const ex = aggMap.get(key);
+      ex.qty = Math.round((ex.qty + (parseFloat(item.qty)||0)) * 1000) / 1000;
+      ex._ids.push(item.id);
+      // Парсимо акти з notes
+      const acts = (item.notes||'').match(/AV\d+[\/\d]*/g) || [];
+      ex._sources.push(...acts.map(a => ({actNum: a, itemId: item.id})));
+    } else {
+      const acts = (item.notes||'').match(/AV\d+[\/\d]*/g) || [];
+      aggMap.set(key, {
+        ...item,
+        qty: parseFloat(item.qty)||0,
+        _ids: [item.id],
+        _sources: acts.map(a => ({actNum: a, itemId: item.id}))
+      });
+    }
+  }
+  let aggregated = [...aggMap.values()];
+
   // Fill categories
-  const cats = [...new Set(items.map(i=>i.category).filter(Boolean))];
+  const cats = [...new Set(aggregated.map(i=>i.category).filter(Boolean))].sort();
   const catSel = document.getElementById('inv-filter-cat');
   const curCat = catSel.value;
   catSel.innerHTML = '<option value="">Всі категорії</option>' + cats.map(c=>`<option ${c===curCat?'selected':''}>${c}</option>`).join('');
 
-  let filtered = items;
+  let filtered = aggregated;
   if (search) filtered = filtered.filter(i=> (i.name||'').toLowerCase().includes(search)||(i.pn||'').toLowerCase().includes(search));
   if (cat) filtered = filtered.filter(i=>i.category===cat);
+
+  // Сортуємо: за категорією, потім за pn
+  filtered.sort((a,b)=>(a.category||'').localeCompare(b.category||'') || (a.pn||'').localeCompare(b.pn||''));
 
   const tbody = document.getElementById('inv-tbody');
   if (!filtered.length) {
@@ -1786,6 +1833,8 @@ async function renderInventory() {
     const pct = item.minQty > 0 ? Math.min(100, Math.round(item.qty/item.minQty*100)) : 100;
     const color = item.qty === 0 ? 'var(--red)' : item.qty <= item.minQty ? 'var(--orange)' : 'var(--green)';
     const badge = item.qty === 0 ? 'badge-danger' : item.qty <= item.minQty ? 'badge-warn' : 'badge-ok';
+    const hasReceipts = item._sources && item._sources.length > 0;
+    const idsJson = JSON.stringify(item._ids).replace(/"/g,'&quot;');
     return `<tr>
       <td class="td-mono">${item.pn||'—'}</td>
       <td>${item.name}</td>
@@ -1798,8 +1847,9 @@ async function renderInventory() {
       <td>${item.location||'—'}</td>
       <td>
         <div class="btn-group">
-          <button class="btn btn-ghost btn-icon btn-sm" onclick="editItem(${item.id})" title="Редагувати">✏️</button>
-          <button class="btn btn-danger btn-icon btn-sm" onclick="deleteItem(${item.id})" title="Видалити">🗑️</button>
+          ${hasReceipts ? `<button class="btn btn-ghost btn-icon btn-sm" onclick="showInvDetail(${item._ids[0]},'${(item.name||'').replace(/'/g,"\\'")}','${(item.pn||'').replace(/'/g,"\\'")}','${(item.category||'').replace(/'/g,"\\'")}',${item.qty},'${item.unit||'шт'}')" title="Надходження">📋</button>` : ''}
+          <button class="btn btn-ghost btn-icon btn-sm" onclick="editItem(${item._ids[0]})" title="Редагувати">✏️</button>
+          <button class="btn btn-danger btn-icon btn-sm" onclick="deleteItemGroup(${JSON.stringify(item._ids).replace(/"/g,"'")})" title="Видалити">🗑️</button>
         </div>
       </td>
     </tr>`;
@@ -1858,6 +1908,67 @@ async function deleteItem(id) {
   await dbDelete('inventory', id);
   showNotif('Видалено','info');
   renderInventory();
+}
+
+async function deleteItemGroup(ids) {
+  if (!confirm('Видалити всі записи цієї позиції?')) return;
+  const idArr = Array.isArray(ids) ? ids : JSON.parse(ids);
+  for (const id of idArr) await dbDelete('inventory', id);
+  showNotif('Видалено','info');
+  renderInventory();
+}
+
+async function showInvDetail(firstId, name, pn, category, totalQty, unit) {
+  // Знаходимо всі записи складу з таким самим pn+category
+  const allItems = await dbGetAll('inventory');
+  const pnKey = pn.toLowerCase().trim();
+  const related = pnKey
+    ? allItems.filter(i => (i.pn||'').toLowerCase().trim() === pnKey && i.category === category)
+    : allItems.filter(i => i.id === firstId);
+
+  // Збираємо всі номери актів
+  const actNums = [];
+  related.forEach(item => {
+    const acts = (item.notes||'').match(/AV[\d]+(?:\/\d+)*/g) || [];
+    acts.forEach(a => actNums.push(a));
+  });
+
+  // Підтягуємо дані з PRELOADED_ACTS (і з IndexedDB)
+  const allActs = await dbGetAll('acts');
+  const allActsArr = allActs.length > 0 ? allActs : PRELOADED_ACTS;
+
+  document.getElementById('inv-detail-title').textContent = `📋 ${name} ${pn ? '/ ' + pn : ''}`;
+  document.getElementById('inv-detail-summary').innerHTML = `
+    <strong>Найменування:</strong> ${name} &nbsp;|&nbsp; <strong>PN:</strong> ${pn||'—'} &nbsp;|&nbsp;
+    <strong>Категорія:</strong> ${category} &nbsp;|&nbsp;
+    <strong>Загальна к-сть на складі: <span style="color:var(--green)">${totalQty} ${unit}</span></strong>
+  `;
+
+  const rows = actNums.map(actNum => {
+    const act = allActsArr.find(a => a.actNum === actNum);
+    if (!act) return `<tr><td class="td-mono"><a href="#" onclick="filterActsTo('${actNum}');closeModal('modal-inv-detail');return false;" style="color:var(--accent)">${actNum}</a></td><td>—</td><td>—</td><td>—</td><td>—</td></tr>`;
+    return `<tr>
+      <td class="td-mono"><a href="#" onclick="filterActsTo('${actNum}');closeModal('modal-inv-detail');return false;" style="color:var(--accent)">${actNum}</a></td>
+      <td>${act.date||'—'}</td>
+      <td><strong>${act.qty||'—'}</strong></td>
+      <td style="max-width:180px;white-space:normal">${act.supplier||'—'}</td>
+      <td style="font-size:11px;color:var(--text2);max-width:160px;white-space:normal">${act.docs||'—'}</td>
+    </tr>`;
+  });
+
+  document.getElementById('inv-detail-tbody').innerHTML = rows.length
+    ? rows.join('')
+    : '<tr><td colspan="5" style="text-align:center;color:var(--text2)">Акти ВК не прив\'язані</td></tr>';
+
+  openModal('modal-inv-detail');
+}
+
+function filterActsTo(actNum) {
+  showPage('acts');
+  setTimeout(()=>{
+    const s = document.getElementById('acts-search');
+    if (s) { s.value = actNum; renderActs(); }
+  }, 100);
 }
 
 // ===================== REQUESTS =====================
@@ -2519,40 +2630,13 @@ async function saveAct() {
     } else {
       showNotif('Акт збережено');
     }
-    // Маркування для інструменту — додаємо реальний запис
+    // Маркування для інструменту
     if (toolMarking) {
-      const newTool = {
-        num: String(PRELOADED_TOOLS.length + 1),
-        name: name,
-        pn: obj.pn || '',
-        type: cat === 'Обладнання' ? 'Стандартний' : 'Стандартний',
-        actNum: actNum,
-        marking: toolMarking,
-        location: 'Warehouse and incoming inspection area',
-        responsible: obj.inspector || '',
-        markingStatus: 'Очікує нанесення'
-      };
-      PRELOADED_TOOLS.push(newTool);
-      // Зберігаємо в tools_edits щоб запис не зник після перезавантаження
-      await dbAdd('tools_edits', { ...newTool, id: undefined, createdAt: now() });
       toolsData = null;
-      showNotif(`✅ Акт збережено. Інструмент додано з маркуванням: ${toolMarking}`);
+      showNotif(`✅ Акт збережено. Маркування: ${toolMarking}`);
     }
     if (measMarking) {
-      const newMeas = {
-        num: String(PRELOADED_MEASURING.length + 1),
-        name: name,
-        pn: obj.pn || '',
-        sn: measMarking,
-        range: '—',
-        period: '12 міс.',
-        lastCal: '',
-        nextCal: '',
-        location: 'Warehouse and incoming inspection area',
-        status: 'Received – Calibration Pending'
-      };
-      PRELOADED_MEASURING.push(newMeas);
-      showNotif(`✅ Акт збережено. Вимірювальний інструмент додано: ${measMarking}`);
+      showNotif(`✅ Акт збережено. Маркування: ${measMarking}`);
     }
   }
 
@@ -3033,22 +3117,8 @@ async function getToolsData() {
   if (toolsData) return toolsData;
   const stored = await dbGetAll('tools_edits');
   const edits = {};
-  const newTools = [];
-  stored.forEach(e => {
-    if (e.marking && PRELOADED_TOOLS.some(t => t.marking === e.marking)) {
-      // Це редагування існуючого
-      edits[e.marking] = e;
-    } else if (e.actNum && !PRELOADED_TOOLS.some(t => t.actNum === e.actNum && t.name === e.name)) {
-      // Це нова позиція додана з акту
-      newTools.push(e);
-    } else if (e.marking) {
-      edits[e.marking] = e;
-    }
-  });
-  toolsData = [
-    ...PRELOADED_TOOLS.map(t => ({...t, ...(edits[t.marking] || {})})),
-    ...newTools
-  ];
+  stored.forEach(e => { edits[e.marking] = e; });
+  toolsData = PRELOADED_TOOLS.map(t => ({...t, ...(edits[t.marking] || {})}));
   return toolsData;
 }
 
@@ -3263,44 +3333,74 @@ async function reloadActsFromPreloaded() {
 }
 
 async function syncActsToInventory() {
-  const acts = await dbGetAll('acts');
-  const inv = await dbGetAll('inventory');
-  // Індекс існуючих позицій по actNum
-  const actNumsOnStock = new Set(inv.map(i => i.actNum).filter(Boolean));
-  let added = 0;
-  for (const a of acts) {
-    if (a.result !== '+') continue; // тільки придатні
-    if (actNumsOnStock.has(a.actNum)) continue; // вже є
-    // Пропускаємо якщо вже є по pn+name
-    const already = inv.find(i =>
-      (a.pn && i.pn && i.pn.toLowerCase().trim() === a.pn.toLowerCase().trim()) ||
-      (!a.pn && i.name && i.name.toLowerCase().trim() === (a.name||'').toLowerCase().trim() && i.category === a.category)
-    );
-    if (already) {
-      // Оновлюємо кількість
-      const qtyStr = String(a.qty||'1').replace(/[^\d.,]/g,'');
-      const qtyNum = parseFloat(qtyStr.replace(',','.')) || 1;
-      already.qty = (parseFloat(already.qty)||0) + qtyNum;
-      if (!already.actNum) already.actNum = a.actNum;
-      await dbPut('inventory', already);
-      actNumsOnStock.add(a.actNum);
-      added++;
-      continue;
-    }
+  // Читаємо всі акти — з IndexedDB або з PRELOADED_ACTS
+  const dbActs = await dbGetAll('acts');
+  const acts = dbActs.length > 0 ? dbActs : PRELOADED_ACTS;
+
+  // Тільки придатні акти з результатом '+'
+  const goodActs = acts.filter(a => a.result === '+' && a.actNum);
+
+  // Будуємо агреговану таблицю: pnKey+category → {name, pn, category, unit, totalQty, actNums[]}
+  const aggMap = new Map();
+  for (const a of goodActs) {
+    const pnKey = (a.pn||'').trim().toLowerCase();
+    const catKey = a.category||'';
+    const mapKey = pnKey ? (pnKey + '|||' + catKey) : ('__name__' + (a.name||'').toLowerCase() + '|||' + catKey);
+
     const qtyStr = String(a.qty||'1').replace(/[^\d.,]/g,'');
     const qtyNum = parseFloat(qtyStr.replace(',','.')) || 1;
-    const unit = String(a.qty||'').includes('м') ? 'м' : (String(a.qty||'').includes('к-т') ? 'к-т' : 'шт');
+    const unit = String(a.qty||'').includes('м') ? 'м' :
+                 String(a.qty||'').includes('к-т') ? 'к-т' :
+                 String(a.qty||'').includes('set') ? 'к-т' : 'шт';
+
+    if (aggMap.has(mapKey)) {
+      const ex = aggMap.get(mapKey);
+      ex.totalQty = Math.round((ex.totalQty + qtyNum) * 1000) / 1000;
+      ex.actNums.push(a.actNum);
+    } else {
+      aggMap.set(mapKey, {
+        name: a.name,
+        pn: a.pn||'',
+        category: catKey,
+        unit,
+        totalQty: qtyNum,
+        actNums: [a.actNum]
+      });
+    }
+  }
+
+  // Очищаємо склад від записів що були створені з актів (source='act')
+  // і перезаписуємо їх свіжими агрегованими даними
+  const existingInv = await dbGetAll('inventory');
+
+  // Видаляємо всі записи з source='act'
+  for (const item of existingInv) {
+    if (item.source === 'act') await dbDelete('inventory', item.id);
+  }
+
+  // Додаємо нові агреговані записи
+  let added = 0;
+  for (const [, agg] of aggMap) {
     await dbAdd('inventory', {
-      name: a.name, pn: a.pn||'', sn: a.sn||'',
-      category: a.category, qty: qtyNum, minQty: 0,
-      unit, location: a.storage||'', notes: `Акт ${a.actNum}`,
-      createdAt: a.date||now(), source: 'act', actNum: a.actNum
+      name: agg.name,
+      pn: agg.pn,
+      sn: '',
+      category: agg.category,
+      qty: agg.totalQty,
+      minQty: 0,
+      unit: agg.unit,
+      location: '',
+      notes: agg.actNums.map(n => 'Акт ' + n).join(', '),
+      createdAt: now(),
+      source: 'act',
+      actNum: agg.actNums[0]
     });
-    actNumsOnStock.add(a.actNum);
     added++;
   }
-  if (added > 0) showNotif(`✅ На склад додано ${added} позицій з актів ВК`);
-  // Оновлюємо Google Sheets
+
+  showNotif(`✅ Синхронізовано: ${added} позицій на складі (з ${goodActs.length} актів)`);
+  renderInventory();
+  loadDashboard();
   await pushInventoryToSheets();
 }
 </script>
