@@ -286,6 +286,9 @@ select option { background: var(--surface2); }
   #print-content td, #print-content th { border: 1px solid #000 !important; color: #000 !important; }
   .modal-overlay:not(#modal-print) { display: none !important; }
   #modal-print { display: flex !important; }
+  /* Прибираємо автоматичний header/footer браузера (дата, час, URL) */
+  @page { margin: 10mm; size: A4; }
+  head { display: none !important; }
 }
 .print-doc { display: none; }
 
@@ -520,6 +523,7 @@ select option { background: var(--surface2); }
               <th>К-сть</th>
               <th>Виконавець</th>
               <th>Кладовщик</th>
+              <th>Статус</th>
             </tr></thead>
             <tbody id="journal-tbody"></tbody>
           </table>
@@ -791,6 +795,30 @@ select option { background: var(--surface2); }
   </div>
 </div>
 
+
+<!-- RETURN CONFIRMATION MODAL -->
+<div class="modal-overlay" id="modal-return">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-hdr">
+      <div class="modal-title">↩ Повернення на склад</div>
+      <button class="modal-close" onclick="closeModal('modal-return')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:16px;color:var(--text2);font-size:13px">Підтвердіть повернення позиції на склад:</p>
+      <div style="background:var(--surface2);border-radius:8px;padding:14px;font-size:13px">
+        <div style="margin-bottom:8px"><strong>Найменування:</strong> <span id="return-modal-name"></span></div>
+        <div style="margin-bottom:8px"><strong>PN:</strong> <span id="return-modal-pn"></span></div>
+        <div style="margin-bottom:8px"><strong>К-сть:</strong> <span id="return-modal-qty" style="color:var(--green);font-weight:600"></span></div>
+        <div><strong>Заявка:</strong> <span id="return-modal-req"></span></div>
+      </div>
+      <p style="margin-top:12px;font-size:12px;color:var(--text2)">Після підтвердження кількість буде зарахована назад на склад, а запис у журналі позначений як повернений.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-return')">Скасувати</button>
+      <button class="btn btn-success" onclick="executeReturn()">✅ Підтвердити повернення</button>
+    </div>
+  </div>
+</div>
 
 <!-- INVENTORY RECEIPTS DETAIL MODAL -->
 <div class="modal-overlay" id="modal-inv-detail">
@@ -1926,22 +1954,34 @@ async function showInvDetail(firstId, name, pn, category, totalQty, unit) {
     ? allItems.filter(i => (i.pn||'').toLowerCase().trim() === pnKey && i.category === category)
     : allItems.filter(i => i.id === firstId);
 
-  // Збираємо всі номери актів
-  const actNums = [];
+  // Збираємо унікальні номери актів з поля notes
+  const actNumSet = new Set();
   related.forEach(item => {
     const acts = (item.notes||'').match(/AV[\d]+(?:\/\d+)*/g) || [];
-    acts.forEach(a => actNums.push(a));
+    acts.forEach(a => actNumSet.add(a));
   });
+  const actNums = [...actNumSet];
 
-  // Підтягуємо дані з PRELOADED_ACTS (і з IndexedDB)
-  const allActs = await dbGetAll('acts');
-  const allActsArr = allActs.length > 0 ? allActs : PRELOADED_ACTS;
+  // Читаємо акти тільки з IndexedDB (або PRELOADED якщо DB порожній)
+  const dbActs = await dbGetAll('acts');
+  const allActsArr = dbActs.length > 0 ? dbActs : PRELOADED_ACTS;
+
+  // Рахуємо правильну суму тільки з актів
+  let realTotal = 0;
+  actNums.forEach(actNum => {
+    const act = allActsArr.find(a => a.actNum === actNum);
+    if (act && act.result === '+') {
+      const q = parseFloat(String(act.qty||'0').replace(/[^\d.,]/g,'').replace(',','.')) || 0;
+      realTotal += q;
+    }
+  });
 
   document.getElementById('inv-detail-title').textContent = `📋 ${name} ${pn ? '/ ' + pn : ''}`;
   document.getElementById('inv-detail-summary').innerHTML = `
     <strong>Найменування:</strong> ${name} &nbsp;|&nbsp; <strong>PN:</strong> ${pn||'—'} &nbsp;|&nbsp;
     <strong>Категорія:</strong> ${category} &nbsp;|&nbsp;
     <strong>Загальна к-сть на складі: <span style="color:var(--green)">${totalQty} ${unit}</span></strong>
+    ${realTotal !== totalQty ? `<br><span style="color:var(--orange);font-size:11px">⚠️ Сума за актами: ${realTotal} ${unit} — натисніть "Синхронізувати акти → склад" для оновлення</span>` : ''}
   `;
 
   const rows = actNums.map(actNum => {
@@ -2374,28 +2414,95 @@ async function renderJournal() {
   entries.sort((a,b)=>new Date(b.date)-new Date(a.date));
   const tbody = document.getElementById('journal-tbody');
   if (!entries.length) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">🔄</div><div class="empty-title">Журнал порожній</div></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">🔄</div><div class="empty-title">Журнал порожній</div></div></td></tr>`;
     return;
   }
-  tbody.innerHTML = entries.map(e=>`<tr>
-    <td style="font-size:12px">${fmtDate(e.date)}</td>
-    <td class="td-mono">${e.reqNum||'—'}</td>
-    <td>${e.aggregate||'—'} ${e.project?'/ '+e.project:''}</td>
-    <td class="td-mono">${e.pn||'—'}</td>
-    <td>${e.name}</td>
-    <td>${e.qty} ${e.unit||'шт'}</td>
-    <td>${e.executor||'—'}</td>
-    <td>${e.storekeeper||'—'}</td>
-  </tr>`).join('');
+  tbody.innerHTML = entries.map(e=>{
+    const returned = e.returned === true;
+    const statusCell = returned
+      ? `<td><span class="badge badge-ok" style="font-size:11px">↩ Повернено ${e.returnedAt ? fmtDate(e.returnedAt).split(' ')[0] : ''}</span></td>`
+      : `<td><button class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 8px" onclick="confirmReturn(${e.id})">↩ Повернути</button></td>`;
+    return `<tr style="${returned ? 'opacity:0.6;' : ''}">
+      <td style="font-size:12px">${fmtDate(e.date)}</td>
+      <td class="td-mono">${e.reqNum||'—'}</td>
+      <td>${e.aggregate||'—'} ${e.project?'/ '+e.project:''}</td>
+      <td class="td-mono">${e.pn||'—'}</td>
+      <td>${e.name}</td>
+      <td>${e.qty} ${e.unit||'шт'}</td>
+      <td>${e.executor||'—'}</td>
+      <td>${e.storekeeper||'—'}</td>
+      ${statusCell}
+    </tr>`;
+  }).join('');
 }
 
 async function exportJournal() {
   const entries = await dbGetAll('journal');
-  const csv = ['Дата,Заявка,Агрегат,Проект,PN,Найменування,К-сть,Од,Виконавець,Кладовщик',
-    ...entries.map(e=>[fmtDate(e.date),e.reqNum,e.aggregate,e.project,e.pn,`"${e.name}"`,e.qty,e.unit,e.executor,e.storekeeper].join(','))].join('\n');
+  const csv = ['Дата,Заявка,Агрегат,Проект,PN,Найменування,К-сть,Од,Виконавець,Кладовщик,Статус',
+    ...entries.map(e=>[fmtDate(e.date),e.reqNum,e.aggregate,e.project,e.pn,`"${e.name}"`,e.qty,e.unit,e.executor,e.storekeeper,e.returned?'Повернено':'Видано'].join(','))].join('\n');
   const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
   a.download = `avronis_journal_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+}
+
+let _pendingReturnId = null;
+async function confirmReturn(journalId) {
+  const entry = await dbGet('journal', journalId);
+  if (!entry) return;
+  _pendingReturnId = journalId;
+  document.getElementById('return-modal-name').textContent = entry.name;
+  document.getElementById('return-modal-pn').textContent = entry.pn || '—';
+  document.getElementById('return-modal-qty').textContent = entry.qty + ' ' + (entry.unit||'шт');
+  document.getElementById('return-modal-req').textContent = entry.reqNum || '—';
+  openModal('modal-return');
+}
+
+async function executeReturn() {
+  if (!_pendingReturnId) return;
+  const entry = await dbGet('journal', _pendingReturnId);
+  if (!entry) { closeModal('modal-return'); return; }
+
+  // Позначаємо запис як повернений
+  entry.returned = true;
+  entry.returnedAt = now();
+  await dbPut('journal', entry);
+
+  // Повертаємо кількість на склад
+  const allInv = await dbGetAll('inventory');
+  const pnKey = (entry.pn||'').toLowerCase().trim();
+  const existing = pnKey
+    ? allInv.find(i => (i.pn||'').toLowerCase().trim() === pnKey && i.category === entry.category)
+    : allInv.find(i => i.name === entry.name && i.category === entry.category);
+
+  const retQty = parseFloat(String(entry.qty||'0').replace(/[^\d.,]/g,'').replace(',','.')) || 0;
+
+  if (existing) {
+    existing.qty = Math.round(((parseFloat(existing.qty)||0) + retQty) * 1000) / 1000;
+    existing.notes = (existing.notes ? existing.notes + ', ' : '') + `Повернено ${entry.reqNum||'—'} ${now().slice(0,10)}`;
+    await dbPut('inventory', existing);
+  } else {
+    // Позиції немає на складі — створюємо новий запис
+    await dbAdd('inventory', {
+      name: entry.name,
+      pn: entry.pn||'',
+      sn: '',
+      category: entry.category||'',
+      qty: retQty,
+      minQty: 0,
+      unit: entry.unit||'шт',
+      location: '',
+      notes: `Повернено з заявки ${entry.reqNum||'—'}`,
+      createdAt: now(),
+      source: 'return'
+    });
+  }
+
+  closeModal('modal-return');
+  _pendingReturnId = null;
+  showNotif(`✅ Повернено на склад: ${entry.name} — ${entry.qty} ${entry.unit||'шт'}`);
+  renderJournal();
+  renderInventory();
+  loadDashboard();
 }
 
 // ===================== ACTS =====================
@@ -3369,13 +3476,11 @@ async function syncActsToInventory() {
     }
   }
 
-  // Очищаємо склад від записів що були створені з актів (source='act')
-  // і перезаписуємо їх свіжими агрегованими даними
+  // Видаляємо ВСІ записи що прийшли з актів або preloaded (не ручні)
   const existingInv = await dbGetAll('inventory');
-
-  // Видаляємо всі записи з source='act'
   for (const item of existingInv) {
-    if (item.source === 'act') await dbDelete('inventory', item.id);
+    const isFromAct = item.source === 'act' || /Акт AV\d+/.test(item.notes||'');
+    if (isFromAct) await dbDelete('inventory', item.id);
   }
 
   // Додаємо нові агреговані записи
