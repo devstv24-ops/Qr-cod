@@ -1743,7 +1743,7 @@ let pendingIssueReqId = null;
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 function now() { return new Date().toISOString(); }
 // Нормалізація pn для порівняння: lowercase, без зайвих пробілів, без * в кінці
-function normPn(pn) { return (pn||'').toLowerCase().replace(/\s+/g,'').replace(/\*+$/,''); }
+function normPn(pn) { return (pn||'').toLowerCase().replace(/[^a-z0-9а-яёіїєґ]/gi,''); }
 function fmtDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -2608,9 +2608,11 @@ async function confirmIssue() {
       date: now(),
       reqId: req.id, reqNum: reqNum(req.id),
       aggregate: req.aggregate, project: req.project,
-      pn: it.pn, name: it.name, qty: it.qty, unit: it.unit||'шт',
+      pn: invItem ? (invItem.pn || it.pn) : it.pn,
+      name: invItem ? (invItem.name || it.name) : it.name,
+      qty: it.qty, unit: it._selUnit || it.unit||'шт',
       executor: req.executor, storekeeper, workplace: req.workplace,
-      category: it.category || ''
+      category: invItem ? (invItem.category || it.category || '') : (it.category || '')
     });
   }
 
@@ -3956,8 +3958,8 @@ async function syncActsToInventory() {
   // Додаємо нові записи: надходження мінус видачі
   let added = 0;
   for (const [mapKey, agg] of aggMap) {
-    // Шукаємо видачі по нормалізованому pn-ключу
-    const pnLookup = agg.pn ? agg.pn.toLowerCase().trim().replace(/\s+/g,' ') : ('__name__' + agg.name.toLowerCase().trim().replace(/\s+/g,' '));
+    // Шукаємо видачі по нормалізованому pn-ключу (normPn прибирає пробіли і *)
+    const pnLookup = agg.pn ? normPn(agg.pn) : ('__name__' + normPn(agg.name));
     const issued = issuedMap.get(pnLookup);
     let stockQty = agg.totalQty;
     if (issued) {
