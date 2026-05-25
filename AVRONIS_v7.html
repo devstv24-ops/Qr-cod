@@ -307,14 +307,14 @@ select option { background: var(--surface2); }
 
 /* CHECKBOX */
 .inv-search-wrap { position: relative; }
-.inv-search-input { width: 100%; padding: 4px 8px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface2); color: var(--text); outline: none; font-family: inherit; }
+.inv-search-input { width: 100%; padding: 6px 8px; font-size: 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface2); color: var(--text); outline: none; font-family: inherit; }
 .inv-search-input:focus { border-color: var(--accent); }
-.inv-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: var(--surface); border: 1px solid var(--accent); border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 9999; box-shadow: var(--shadow); display: none; }
+.inv-dropdown { position: fixed; background: var(--surface); border: 1px solid var(--accent); border-radius: 6px; max-height: 220px; overflow-y: auto; z-index: 99999; box-shadow: 0 8px 32px rgba(0,0,0,0.5); display: none; min-width: 280px; }
 .inv-dropdown.open { display: block; }
-.inv-dropdown-item { padding: 7px 10px; font-size: 12px; cursor: pointer; border-bottom: 1px solid var(--border2); }
-.inv-dropdown-item:hover { background: var(--surface2); }
+.inv-dropdown-item { padding: 8px 12px; font-size: 12px; cursor: pointer; border-bottom: 1px solid var(--border2); }
+.inv-dropdown-item:hover, .inv-dropdown-item:active { background: var(--surface3); }
 .inv-dropdown-item .inv-di-pn { font-family: monospace; color: var(--accent); font-size: 11px; }
-.inv-dropdown-item .inv-di-qty { float: right; color: var(--green); font-size: 11px; }
+.inv-dropdown-item .inv-di-qty { float: right; color: var(--green); font-size: 11px; font-weight:600; }
 .cb-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border2); cursor: pointer; }
 .cb-row:last-child { border-bottom: none; }
 .cb-row input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
@@ -1011,7 +1011,7 @@ select option { background: var(--surface2); }
 
 <!-- CONFIRM ISSUE MODAL -->
 <div class="modal-overlay" id="modal-confirm-issue">
-  <div class="modal" style="max-width:600px">
+  <div class="modal" style="max-width:820px">
     <div class="modal-hdr">
       <div class="modal-title">✅ Підтвердження видачі</div>
       <button class="modal-close" onclick="closeModal('modal-confirm-issue')">✕</button>
@@ -2433,47 +2433,47 @@ function toggleIssueRow(cb) {
   row.style.opacity = cb.checked ? '1' : '0.4';
 }
 
-let _invSearchCache = null;
-async function getInvForSearch() {
-  if (_invSearchCache) return _invSearchCache;
-  _invSearchCache = await dbGetAll('inventory');
-  return _invSearchCache;
-}
-
 function invSearchInput(el) {
+  el.dataset.invId = '';
   const idx = el.dataset.idx;
   const q = el.value.toLowerCase().trim();
-  el.dataset.invId = ''; // скидаємо вибір при введенні
-  showInvDropdown(idx, q);
+  showInvDropdown(idx, q, el);
 }
 
 function invSearchFocus(el) {
   const idx = el.dataset.idx;
-  showInvDropdown(idx, el.value.toLowerCase().trim());
+  showInvDropdown(idx, el.value.toLowerCase().trim(), el);
 }
 
 function invSearchBlur(el) {
   const idx = el.dataset.idx;
-  // Затримка щоб клік на пункт встиг спрацювати
   setTimeout(() => {
     const dd = document.getElementById('inv-dd-' + idx);
     if (dd) dd.classList.remove('open');
-  }, 200);
+  }, 250);
 }
 
-async function showInvDropdown(idx, q) {
+async function showInvDropdown(idx, q, inputEl) {
   const dd = document.getElementById('inv-dd-' + idx);
   if (!dd) return;
+
+  // Позиціонуємо dropdown під полем вводу
+  const rect = inputEl.getBoundingClientRect();
+  dd.style.left = rect.left + 'px';
+  dd.style.top = (rect.bottom + 2) + 'px';
+  dd.style.width = Math.max(rect.width, 300) + 'px';
+
   const inv = await getInvForSearch();
 
-  // Агрегуємо по pn+name (як у renderInventory)
+  // Агрегуємо по pn+name
   const seen = new Map();
   for (const i of inv) {
     const key = (i.pn||'').toLowerCase().trim() + '|||' + (i.name||'').toLowerCase();
-    if (!seen.has(key)) seen.set(key, i);
-    else {
+    if (!seen.has(key)) {
+      seen.set(key, {...i, qty: parseFloat(i.qty)||0});
+    } else {
       const ex = seen.get(key);
-      ex.qty = Math.round(((parseFloat(ex.qty)||0) + (parseFloat(i.qty)||0)) * 1000) / 1000;
+      ex.qty = Math.round((ex.qty + (parseFloat(i.qty)||0)) * 1000) / 1000;
     }
   }
   let items = [...seen.values()];
@@ -2484,19 +2484,25 @@ async function showInvDropdown(idx, q) {
       (i.name||'').toLowerCase().includes(q)
     );
   }
-  items = items.slice(0, 50); // макс 50 результатів
+  // Сортуємо: спочатку позиції з кількістю > 0
+  items.sort((a,b) => (b.qty > 0 ? 1 : 0) - (a.qty > 0 ? 1 : 0));
+  items = items.slice(0, 60);
 
-  if (!items.length) {
+  if (!items.length && q) {
     dd.innerHTML = '<div class="inv-dropdown-item" style="color:var(--text2)">Нічого не знайдено</div>';
   } else {
-    dd.innerHTML = '<div class="inv-dropdown-item" style="color:var(--text2);font-style:italic" onmousedown="selectInvItem(' + idx + ', \'\', \'— не списувати —\')">— не списувати —</div>' +
+    dd.innerHTML =
+      `<div class="inv-dropdown-item" style="color:var(--text2);font-style:italic"
+        onclick="selectInvItem(${idx}, '', '— не списувати —', '')">— не списувати —</div>` +
       items.map(i => {
-        const label = `${i.pn||'—'} · ${i.name}`;
+        const pn = i.pn||'—';
         const qty = `${i.qty} ${i.unit||'шт'}`;
-        return `<div class="inv-dropdown-item" onmousedown="selectInvItem(${idx}, ${i.id}, '${label.replace(/'/g,"\\'")}', '${qty}')">
-          <span class="inv-di-pn">${i.pn||'—'}</span>
-          <span class="inv-di-qty">${qty}</span>
-          <div style="color:var(--text);font-size:12px;margin-top:2px">${i.name}</div>
+        const qtyColor = i.qty > 0 ? 'var(--green)' : 'var(--red)';
+        return `<div class="inv-dropdown-item"
+          onclick="selectInvItem(${idx}, ${i.id}, '${(pn+'·'+i.name).replace(/'/g,"\\'")}', '${qty}')">
+          <span class="inv-di-pn">${pn}</span>
+          <span class="inv-di-qty" style="color:${qtyColor}">${qty}</span>
+          <div style="color:var(--text);font-size:12px;margin-top:2px;clear:both">${i.name}</div>
         </div>`;
       }).join('');
   }
@@ -2508,17 +2514,20 @@ function selectInvItem(idx, invId, label, qty) {
   const dd = document.getElementById('inv-dd-' + idx);
   if (searchEl) {
     searchEl.value = invId ? `${label} (${qty})` : '';
-    searchEl.dataset.invId = invId || '';
-    // Розблоковуємо поле кількості якщо вибрали позицію
+    searchEl.dataset.invId = String(invId || '');
     const row = searchEl.closest('tr');
     const qtyInput = row?.querySelector('.issue-qty-input');
-    if (qtyInput) qtyInput.disabled = !invId;
     const cb = row?.querySelector('.issue-cb');
-    if (cb) cb.checked = !!invId;
-    row.style.opacity = invId ? '1' : '0.4';
+    if (invId) {
+      if (qtyInput) qtyInput.disabled = false;
+      if (cb) cb.checked = true;
+      row.style.opacity = '1';
+    } else {
+      if (cb) cb.checked = false;
+      row.style.opacity = '0.4';
+    }
   }
   if (dd) dd.classList.remove('open');
-  // Скидаємо кеш щоб наступного разу читати свіжі дані
   _invSearchCache = null;
 }
 
