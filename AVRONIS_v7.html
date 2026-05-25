@@ -1158,6 +1158,7 @@ select option { background: var(--surface2); }
             </label>
           </div>
         </div>
+      </div>
       <!-- Row 4: Результат -->
       <div class="form-row">
         <div class="form-group full">
@@ -1741,6 +1742,8 @@ let pendingIssueReqId = null;
 // ===================== UTILS =====================
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 function now() { return new Date().toISOString(); }
+// Нормалізація pn для порівняння: lowercase, без зайвих пробілів, без * в кінці
+function normPn(pn) { return (pn||'').toLowerCase().replace(/\s+/g,'').replace(/\*+$/,''); }
 function fmtDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -2346,17 +2349,17 @@ async function openConfirmIssue(reqId) {
   const aggInv = [];
   const seen = new Set();
   for (const i of inv) {
-    const key = (i.pn||'').toLowerCase().trim().replace(/\s+/g,' ') + '|||' + (i.name||'').toLowerCase();
+    const key = normPn(i.pn) + '|||' + (i.name||'').toLowerCase();
     if (!seen.has(key)) { seen.add(key); aggInv.push(i); }
   }
 
   tbody.innerHTML = req.items.map((it, idx) => {
     const reqUnit = it.unit || 'шт';
-    const pnNorm = (it.pn||'').toLowerCase().trim().replace(/\s+/g,' ');
+    const pnNorm = normPn(it.pn);
     const nameNorm = (it.name||'').toLowerCase().trim();
 
     // Шукаємо точний збіг по pn
-    let exactMatch = inv.find(i => (i.pn||'').toLowerCase().trim().replace(/\s+/g,' ') === pnNorm && pnNorm);
+    let exactMatch = inv.find(i => normPn(i.pn) === pnNorm && pnNorm);
     // Якщо не знайшли — шукаємо по назві
     if (!exactMatch) exactMatch = inv.find(i => (i.name||'').toLowerCase().trim() === nameNorm);
 
@@ -2378,8 +2381,8 @@ async function openConfirmIssue(reqId) {
 
     // Dropdown зі списком всього складу (відсортований: спочатку схожі)
     const sortedInv = [...aggInv].sort((a, b) => {
-      const aNorm = (a.pn||'').toLowerCase().trim().replace(/\s+/g,' ');
-      const bNorm = (b.pn||'').toLowerCase().trim().replace(/\s+/g,' ');
+      const aNorm = normPn(a.pn);
+      const bNorm = normPn(b.pn);
       const aMatch = aNorm === pnNorm || (a.name||'').toLowerCase() === nameNorm ? 0 : 1;
       const bMatch = bNorm === pnNorm || (b.name||'').toLowerCase() === nameNorm ? 0 : 1;
       return aMatch - bMatch;
@@ -2434,12 +2437,13 @@ function toggleIssueRow(cb) {
 }
 
 function filterInvSelect(filterInput, idx) {
-  const q = filterInput.value.toLowerCase();
+  const q = filterInput.value.toLowerCase().trim().replace(/\*/g,'');
   const sel = document.querySelector(`.issue-inv-select[data-idx="${idx}"]`);
   if (!sel) return;
   Array.from(sel.options).forEach(opt => {
-    if (!opt.value) { opt.style.display = ''; return; } // "не списувати" завжди видно
-    opt.style.display = opt.text.toLowerCase().includes(q) ? '' : 'none';
+    if (!opt.value) { opt.style.display = ''; return; }
+    const text = opt.text.toLowerCase().replace(/\*/g,'');
+    opt.style.display = text.includes(q) ? '' : 'none';
   });
 }
 function invSearchFocus(el) {
@@ -2574,18 +2578,18 @@ async function confirmIssue() {
     let invItem = null;
     if (it._selPn || it._selName) {
       // Шукаємо по вибраному pn+name зі складу
-      const pnNorm = (it._selPn||'').toLowerCase().trim().replace(/\s+/g,' ');
+      const pnNorm = normPn(it._selPn);
       const nameNorm = (it._selName||'').toLowerCase().trim();
       invItem = inv.find(i =>
-        (pnNorm && (i.pn||'').toLowerCase().trim().replace(/\s+/g,' ') === pnNorm) ||
+        (pnNorm && normPn(i.pn) === pnNorm) ||
         (!pnNorm && (i.name||'').toLowerCase().trim() === nameNorm)
       );
     }
     if (!invItem) {
       // Fallback: шукаємо по pn позиції заявки
-      const pnNorm = (it.pn||'').toLowerCase().trim().replace(/\s+/g,' ');
+      const pnNorm = normPn(it.pn);
       invItem = pnNorm
-        ? inv.find(i => (i.pn||'').toLowerCase().trim().replace(/\s+/g,' ') === pnNorm)
+        ? inv.find(i => normPn(i.pn) === pnNorm)
         : inv.find(i => (i.name||'').toLowerCase().trim() === (it.name||'').toLowerCase().trim());
     }
 
@@ -3903,9 +3907,9 @@ async function syncActsToInventory() {
   // Будуємо агреговану таблицю надходжень: pnKey+category → totalQty
   const aggMap = new Map();
   for (const a of goodActs) {
-    const pnKey = (a.pn||'').trim().toLowerCase().replace(/\s+/g,' ');
+    const pnKey = normPn(a.pn||'');
     const catKey = a.category||'';
-    const mapKey = pnKey ? (pnKey + '|||' + catKey) : ('__name__' + (a.name||'').toLowerCase().trim().replace(/\s+/g,' ') + '|||' + catKey);
+    const mapKey = pnKey ? (pnKey + '|||' + catKey) : ('__name__' + normPn(a.name) + '|||' + catKey);
     const qtyStr = String(a.qty||'1').replace(/[^\d.,]/g,'');
     const qtyNum = parseFloat(qtyStr.replace(',','.')) || 1;
     const unit = String(a.qty||'').includes('к-т') ? 'к-т' :
@@ -3925,8 +3929,8 @@ async function syncActsToInventory() {
   for (const j of journal) {
     if (j.returned) continue;
     // Нормалізуємо pn — прибираємо зайві пробіли, lowercase
-    const pnKey = (j.pn||'').trim().toLowerCase().replace(/\s+/g,' ');
-    const mapKey = pnKey ? pnKey : ('__name__' + (j.name||'').toLowerCase().trim().replace(/\s+/g,' '));
+    const pnKey = normPn(j.pn||'');
+    const mapKey = pnKey ? pnKey : ('__name__' + normPn(j.name));
     const jQty = parseFloat(String(j.qty||'0').replace(',','.')) || 0;
     const jUnit = j.unit || 'шт';
     if (issuedMap.has(mapKey)) {
