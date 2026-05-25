@@ -3744,17 +3744,16 @@ async function syncActsToInventory() {
   const journal = await dbGetAll('journal');
   const issuedMap = new Map();
   for (const j of journal) {
-    if (j.returned) continue; // повернуті не рахуємо
+    if (j.returned) continue;
     const pnKey = (j.pn||'').trim().toLowerCase();
-    const catKey = j.category||'';
-    const mapKey = pnKey ? (pnKey + '|||' + catKey) : ('__name__' + (j.name||'').toLowerCase() + '|||' + catKey);
+    // Ключ тільки по pn (без категорії — бо в журналі category часто порожня)
+    const mapKey = pnKey ? pnKey : ('__name__' + (j.name||'').toLowerCase());
     const jQty = parseFloat(String(j.qty||'0').replace(',','.')) || 0;
     const jUnit = j.unit || 'шт';
     if (issuedMap.has(mapKey)) {
       const ex = issuedMap.get(mapKey);
-      // Конвертуємо до одиниць складу якщо потрібно
       let addQty = jQty;
-      const stockUnit = aggMap.get(mapKey)?.unit || jUnit;
+      const stockUnit = ex.unit;
       if (stockUnit !== jUnit) {
         const conv = convertUnits(jQty, jUnit, stockUnit);
         if (conv !== null) addQty = conv;
@@ -3775,10 +3774,11 @@ async function syncActsToInventory() {
   // Додаємо нові записи: надходження мінус видачі
   let added = 0;
   for (const [mapKey, agg] of aggMap) {
-    const issued = issuedMap.get(mapKey);
+    // Шукаємо видачі по pn-ключу (без категорії)
+    const pnLookup = agg.pn ? agg.pn.toLowerCase().trim() : ('__name__' + agg.name.toLowerCase());
+    const issued = issuedMap.get(pnLookup);
     let stockQty = agg.totalQty;
     if (issued) {
-      // Конвертуємо видані у одиниці складу
       let issuedInStockUnit = issued.qty;
       if (issued.unit !== agg.unit) {
         const conv = convertUnits(issued.qty, issued.unit, agg.unit);
