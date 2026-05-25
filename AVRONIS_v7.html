@@ -3724,9 +3724,9 @@ async function syncActsToInventory() {
   // Будуємо агреговану таблицю надходжень: pnKey+category → totalQty
   const aggMap = new Map();
   for (const a of goodActs) {
-    const pnKey = (a.pn||'').trim().toLowerCase();
+    const pnKey = (a.pn||'').trim().toLowerCase().replace(/\s+/g,' ');
     const catKey = a.category||'';
-    const mapKey = pnKey ? (pnKey + '|||' + catKey) : ('__name__' + (a.name||'').toLowerCase() + '|||' + catKey);
+    const mapKey = pnKey ? (pnKey + '|||' + catKey) : ('__name__' + (a.name||'').toLowerCase().trim().replace(/\s+/g,' ') + '|||' + catKey);
     const qtyStr = String(a.qty||'1').replace(/[^\d.,]/g,'');
     const qtyNum = parseFloat(qtyStr.replace(',','.')) || 1;
     const unit = String(a.qty||'').includes('к-т') ? 'к-т' :
@@ -3745,17 +3745,16 @@ async function syncActsToInventory() {
   const issuedMap = new Map();
   for (const j of journal) {
     if (j.returned) continue;
-    const pnKey = (j.pn||'').trim().toLowerCase();
-    // Ключ тільки по pn (без категорії — бо в журналі category часто порожня)
-    const mapKey = pnKey ? pnKey : ('__name__' + (j.name||'').toLowerCase());
+    // Нормалізуємо pn — прибираємо зайві пробіли, lowercase
+    const pnKey = (j.pn||'').trim().toLowerCase().replace(/\s+/g,' ');
+    const mapKey = pnKey ? pnKey : ('__name__' + (j.name||'').toLowerCase().trim().replace(/\s+/g,' '));
     const jQty = parseFloat(String(j.qty||'0').replace(',','.')) || 0;
     const jUnit = j.unit || 'шт';
     if (issuedMap.has(mapKey)) {
       const ex = issuedMap.get(mapKey);
       let addQty = jQty;
-      const stockUnit = ex.unit;
-      if (stockUnit !== jUnit) {
-        const conv = convertUnits(jQty, jUnit, stockUnit);
+      if (ex.unit !== jUnit) {
+        const conv = convertUnits(jQty, jUnit, ex.unit);
         if (conv !== null) addQty = conv;
       }
       ex.qty = Math.round((ex.qty + addQty) * 1000) / 1000;
@@ -3774,8 +3773,8 @@ async function syncActsToInventory() {
   // Додаємо нові записи: надходження мінус видачі
   let added = 0;
   for (const [mapKey, agg] of aggMap) {
-    // Шукаємо видачі по pn-ключу (без категорії)
-    const pnLookup = agg.pn ? agg.pn.toLowerCase().trim() : ('__name__' + agg.name.toLowerCase());
+    // Шукаємо видачі по нормалізованому pn-ключу
+    const pnLookup = agg.pn ? agg.pn.toLowerCase().trim().replace(/\s+/g,' ') : ('__name__' + agg.name.toLowerCase().trim().replace(/\s+/g,' '));
     const issued = issuedMap.get(pnLookup);
     let stockQty = agg.totalQty;
     if (issued) {
