@@ -1018,7 +1018,7 @@ select option { background: var(--surface2); }
       <div style="font-size:13px;font-weight:600;margin-bottom:8px">Позиції до видачі: <span style="font-weight:400;color:var(--text2);font-size:12px">(зніміть галочку з позицій яких немає або не видаєте)</span></div>
       <div class="tbl-wrap">
         <table>
-          <thead><tr><th style="width:36px">✓</th><th>PN</th><th>Найменування</th><th>К-сть видати</th><th>На складі</th></tr></thead>
+          <thead><tr><th style="width:36px">✓</th><th>PN</th><th>Найменування</th><th>К-сть</th><th>Позиція на складі</th></tr></thead>
           <tbody id="confirm-issue-tbody"></tbody>
         </table>
       </div>
@@ -1510,15 +1510,15 @@ const KITS = {
     {pn:'4-Окс.фос-ОСТ 1 11532-74',n:'Шайба пружинна',q:7},
     {pn:'4-Кд-ОСТ 1 11532-74',n:'Шайба пружинна',q:1},
     {pn:'5-Кд-ОСТ 1 11532-74',n:'Шайба пружинна',q:2},
-    {pn:'1×12 ГОСТ 397-79',n:'Шплінт',q:2},
-    {pn:'1×14 ГОСТ 397-79',n:'Шплінт',q:1},
-    {pn:'1,6×10 ГОСТ 397-79',n:'Шплінт',q:2},
-    {pn:'1,6×14 ГОСТ 397-79',n:'Шплінт',q:2},
-    {pn:'1,6×16 ГОСТ 397-79',n:'Шплінт',q:2},
-    {pn:'1,6×25 ГОСТ 397-79',n:'Шплінт',q:1},
-    {pn:'1,6×32 ГОСТ 397-79',n:'Шплінт',q:1},
-    {pn:'2×16 ГОСТ 397-79',n:'Шплінт',q:1},
-    {pn:'2×20 ГОСТ 397-79',n:'Шплінт',q:1},
+    {pn:'1×12.0.029 ГОСТ 397-79*',n:'Шплінт',q:2},
+    {pn:'1×14.0.005 ГОСТ 397-79*',n:'Шплінт',q:1},
+    {pn:'1,6×10.0.029 ГОСТ 397-79*',n:'Шплінт',q:2},
+    {pn:'1,6×14.0.029 ГОСТ 397-79*',n:'Шплінт',q:2},
+    {pn:'1,6×16.0.029 ГОСТ 397-79*',n:'Шплінт',q:2},
+    {pn:'1,6×25.0.029 ГОСТ 397-79*',n:'Шплінт',q:1},
+    {pn:'1,6×32.0.05 ГОСТ 397-79*',n:'Шплінт',q:1},
+    {pn:'2×16.0.029 ГОСТ 397-79*',n:'Шплінт',q:1},
+    {pn:'2×20.0.029 ГОСТ 397-79*',n:'Шплінт',q:1},
     {pn:'ПМ15-681',n:'Втулка',q:1},
     {pn:'РА60Б-615',n:'Прокладка',q:1},
     {pn:'ГОСТ 5496-78,2-3С 4,5-1,3',n:'Трубка',q:135,unit:'мм'},
@@ -1577,15 +1577,15 @@ const KITS = {
     {pn:'4-Окс.фос-ОСТ 1 11532-74',n:'Шайба пружинна',q:7},
     {pn:'4-Кд-ОСТ 1 11532-74',n:'Шайба пружинна',q:1},
     {pn:'5-Кд-ОСТ 1 11532-74',n:'Шайба пружинна',q:2},
-    {pn:'1×12 ГОСТ 397-79',n:'Шплінт',q:2},
-    {pn:'1×14 ГОСТ 397-79',n:'Шплінт',q:1},
-    {pn:'1,6×10 ГОСТ 397-79',n:'Шплінт',q:2},
-    {pn:'1,6×14 ГОСТ 397-79',n:'Шплінт',q:2},
-    {pn:'1,6×16 ГОСТ 397-79',n:'Шплінт',q:5},
-    {pn:'1,6×25 ГОСТ 397-79',n:'Шплінт',q:1},
-    {pn:'1,6×32 ГОСТ 397-79',n:'Шплінт',q:1},
-    {pn:'2×16 ГОСТ 397-79',n:'Шплінт',q:1},
-    {pn:'2×20 ГОСТ 397-79',n:'Шплінт',q:2},
+    {pn:'1×12.0.029 ГОСТ 397-79*',n:'Шплінт',q:2},
+    {pn:'1×14.0.005 ГОСТ 397-79*',n:'Шплінт',q:1},
+    {pn:'1,6×10.0.029 ГОСТ 397-79*',n:'Шплінт',q:2},
+    {pn:'1,6×14.0.029 ГОСТ 397-79*',n:'Шплінт',q:2},
+    {pn:'1,6×16.0.029 ГОСТ 397-79*',n:'Шплінт',q:5},
+    {pn:'1,6×25.0.029 ГОСТ 397-79*',n:'Шплінт',q:1},
+    {pn:'1,6×32.0.05 ГОСТ 397-79*',n:'Шплінт',q:1},
+    {pn:'2×16.0.029 ГОСТ 397-79*',n:'Шплінт',q:1},
+    {pn:'2×20.0.029 ГОСТ 397-79*',n:'Шплінт',q:2},
     {pn:'ПМ22-2В',n:'Мікровимикач',q:2},
     {pn:'ПМ15-681',n:'Втулка',q:1},
     {pn:'РА60Б-615',n:'Прокладка',q:1},
@@ -2328,46 +2328,79 @@ async function openConfirmIssue(reqId) {
     👷 ${req.executor||'—'} · 📁 ${req.project||'—'} · 🏭 ${req.workplace||'—'}`;
 
   const tbody = document.getElementById('confirm-issue-tbody');
-  tbody.innerHTML = req.items.map((it, idx) => {
-    const invItem = inv.find(i => i.pn && i.pn === it.pn) || inv.find(i => i.name === it.name);
-    const onStock = invItem ? invItem.qty : null;
-    const stockUnit = invItem ? (invItem.unit||'шт') : (it.unit||'шт');
-    const reqUnit = it.unit || 'шт';
 
-    // Конвертуємо потрібну кількість у одиниці складу для порівняння
+  // Будуємо агрегований список складу для dropdown (по pn+name)
+  const aggInv = [];
+  const seen = new Set();
+  for (const i of inv) {
+    const key = (i.pn||'').toLowerCase().trim().replace(/\s+/g,' ') + '|||' + (i.name||'').toLowerCase();
+    if (!seen.has(key)) { seen.add(key); aggInv.push(i); }
+  }
+
+  tbody.innerHTML = req.items.map((it, idx) => {
+    const reqUnit = it.unit || 'шт';
+    const pnNorm = (it.pn||'').toLowerCase().trim().replace(/\s+/g,' ');
+    const nameNorm = (it.name||'').toLowerCase().trim();
+
+    // Шукаємо точний збіг по pn
+    let exactMatch = inv.find(i => (i.pn||'').toLowerCase().trim().replace(/\s+/g,' ') === pnNorm && pnNorm);
+    // Якщо не знайшли — шукаємо по назві
+    if (!exactMatch) exactMatch = inv.find(i => (i.name||'').toLowerCase().trim() === nameNorm);
+
+    const onStock = exactMatch ? exactMatch.qty : null;
+    const stockUnit = exactMatch ? (exactMatch.unit||'шт') : reqUnit;
+
     let reqInStockUnit = it.qty;
     if (stockUnit !== reqUnit) {
       const conv = convertUnits(it.qty, reqUnit, stockUnit);
       if (conv !== null) reqInStockUnit = conv;
     }
-    const enough = onStock === null ? false : onStock >= reqInStockUnit;
-
-    // Підказка конвертації
+    const enough = onStock !== null && onStock >= reqInStockUnit;
     const convHint = (stockUnit !== reqUnit && onStock !== null)
       ? `<div style="font-size:10px;color:var(--text2)">${it.qty} ${reqUnit} = ${reqInStockUnit} ${stockUnit}</div>` : '';
 
     const statusBadge = onStock === null
-      ? '<span class="badge badge-grey" style="font-size:11px">Не на складі</span>'
+      ? '<span class="badge badge-grey" style="font-size:11px">Не знайдено</span>'
       : `<span class="badge ${enough ? 'badge-ok' : 'badge-danger'}">${onStock} ${stockUnit}</span>${convHint}`;
+
+    // Dropdown зі списком всього складу (відсортований: спочатку схожі)
+    const sortedInv = [...aggInv].sort((a, b) => {
+      const aNorm = (a.pn||'').toLowerCase().trim().replace(/\s+/g,' ');
+      const bNorm = (b.pn||'').toLowerCase().trim().replace(/\s+/g,' ');
+      const aMatch = aNorm === pnNorm || (a.name||'').toLowerCase() === nameNorm ? 0 : 1;
+      const bMatch = bNorm === pnNorm || (b.name||'').toLowerCase() === nameNorm ? 0 : 1;
+      return aMatch - bMatch;
+    });
+
+    const selectedId = exactMatch ? exactMatch.id : '';
+    const options = `<option value="">— не списувати —</option>` +
+      sortedInv.map(i => {
+        const label = `${i.pn||'—'} · ${i.name} (${i.qty} ${i.unit||'шт'})`;
+        return `<option value="${i.id}" ${i.id === selectedId ? 'selected' : ''}>${label}</option>`;
+      }).join('');
 
     return `<tr>
       <td style="text-align:center">
         <input type="checkbox" class="issue-cb" data-idx="${idx}"
-          data-stock-unit="${stockUnit}" data-req-unit="${reqUnit}"
           ${onStock !== null ? 'checked' : ''}
           onchange="toggleIssueRow(this)" style="width:16px;height:16px;accent-color:var(--accent)">
       </td>
       <td class="td-mono" style="font-size:11px">${it.pn||'—'}</td>
       <td>${it.name}</td>
       <td style="text-align:center">
-        <input type="number" class="issue-qty-input" data-idx="${idx}" data-max="${it.qty}"
-          data-stock-unit="${stockUnit}" data-req-unit="${reqUnit}"
+        <input type="number" class="issue-qty-input" data-idx="${idx}"
           value="${it.qty}" min="0.001" step="0.001"
           style="width:65px;padding:3px 6px;font-size:12px;text-align:center;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text)"
           ${onStock === null ? 'disabled' : ''}>
         ${reqUnit}
       </td>
-      <td>${statusBadge}</td>
+      <td>
+        <select class="issue-inv-select" data-idx="${idx}"
+          style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);max-width:240px">
+          ${options}
+        </select>
+        <div style="margin-top:3px">${statusBadge}</div>
+      </td>
     </tr>`;
   }).join('');
 
@@ -2399,9 +2432,11 @@ async function confirmIssue() {
   req.items.forEach((it, idx) => {
     const cb = document.querySelector(`.issue-cb[data-idx="${idx}"]`);
     const qtyInput = document.querySelector(`.issue-qty-input[data-idx="${idx}"]`);
+    const invSelect = document.querySelector(`.issue-inv-select[data-idx="${idx}"]`);
     if (cb && cb.checked) {
       const actualQty = parseFloat(qtyInput?.value || it.qty) || it.qty;
-      issuedItems.push({...it, qty: actualQty});
+      const selectedInvId = invSelect ? parseInt(invSelect.value) : null;
+      issuedItems.push({...it, qty: actualQty, _selectedInvId: selectedInvId || null});
     } else {
       skippedItems.push(it);
     }
@@ -2409,7 +2444,11 @@ async function confirmIssue() {
 
   // Списуємо зі складу і пишемо в журнал тільки видані
   for (const it of issuedItems) {
-    const invItem = inv.find(i => i.pn && i.pn === it.pn) || inv.find(i => i.name === it.name);
+    // Використовуємо вибрану кладовщиком позицію зі складу
+    const invItem = it._selectedInvId
+      ? inv.find(i => i.id === it._selectedInvId)
+      : (inv.find(i => (i.pn||'').toLowerCase().trim().replace(/\s+/g,' ') === (it.pn||'').toLowerCase().trim().replace(/\s+/g,' ') && it.pn) || inv.find(i => i.name === it.name));
+
     if (invItem) {
       const stockUnit = invItem.unit || 'шт';
       const reqUnit = it.unit || 'шт';
