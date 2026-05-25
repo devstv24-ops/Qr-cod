@@ -2414,7 +2414,6 @@ async function confirmIssue() {
       const stockUnit = invItem.unit || 'шт';
       const reqUnit = it.unit || 'шт';
       let deductQty = it.qty;
-      // Конвертуємо у одиниці складу якщо відрізняються
       if (stockUnit !== reqUnit) {
         const conv = convertUnits(it.qty, reqUnit, stockUnit);
         if (conv !== null) deductQty = conv;
@@ -2422,6 +2421,15 @@ async function confirmIssue() {
       invItem.qty = Math.max(0, Math.round((invItem.qty - deductQty) * 10000) / 10000);
       await dbPut('inventory', invItem);
     }
+    await dbAdd('journal', {
+      date: now(),
+      reqId: req.id, reqNum: reqNum(req.id),
+      aggregate: req.aggregate, project: req.project,
+      pn: it.pn, name: it.name, qty: it.qty, unit: it.unit||'шт',
+      executor: req.executor, storekeeper, workplace: req.workplace,
+      category: it.category || ''
+    });
+  }
     await dbAdd('journal', {
       date: now(),
       reqId: req.id, reqNum: reqNum(req.id),
@@ -2452,8 +2460,9 @@ async function confirmIssue() {
   closeModal('modal-confirm-issue');
   renderRequests();
   loadDashboard();
-  pushInventoryToSheets();
-  setTimeout(()=>printRequest(req.id), 300);
+  // Перераховуємо склад з нуля (надходження мінус видачі)
+  await syncActsToInventory();
+  setTimeout(()=>printRequest(req.id), 400);
 }
 
 // ===================== PRINT =====================
@@ -2727,8 +2736,7 @@ async function executeReturn() {
   _pendingReturnId = null;
   showNotif(`✅ Повернено на склад: ${entry.name} — ${entry.qty} ${entry.unit||'шт'}`);
   renderJournal();
-  renderInventory();
-  loadDashboard();
+  await syncActsToInventory();
 }
 
 // ===================== ACTS =====================
@@ -3718,70 +3726,85 @@ async function reloadActsFromPreloaded() {
 }
 
 async function syncActsToInventory() {
-  // Читаємо всі акти — з IndexedDB або з PRELOADED_ACTS
   const dbActs = await dbGetAll('acts');
   const acts = dbActs.length > 0 ? dbActs : PRELOADED_ACTS;
-
-  // Тільки придатні акти з результатом '+'
   const goodActs = acts.filter(a => a.result === '+' && a.actNum);
 
-  // Будуємо агреговану таблицю: pnKey+category → {name, pn, category, unit, totalQty, actNums[]}
+  // Будуємо агреговану таблицю надходжень: pnKey+category → totalQty
   const aggMap = new Map();
   for (const a of goodActs) {
     const pnKey = (a.pn||'').trim().toLowerCase();
     const catKey = a.category||'';
     const mapKey = pnKey ? (pnKey + '|||' + catKey) : ('__name__' + (a.name||'').toLowerCase() + '|||' + catKey);
-
     const qtyStr = String(a.qty||'1').replace(/[^\d.,]/g,'');
     const qtyNum = parseFloat(qtyStr.replace(',','.')) || 1;
-    const unit = String(a.qty||'').includes('м') ? 'м' :
-                 String(a.qty||'').includes('к-т') ? 'к-т' :
-                 String(a.qty||'').includes('set') ? 'к-т' : 'шт';
-
+    const unit = String(a.qty||'').includes('к-т') ? 'к-т' :
+                 (a.unit || (String(a.qty||'').includes('м') ? 'м' : 'шт'));
     if (aggMap.has(mapKey)) {
       const ex = aggMap.get(mapKey);
       ex.totalQty = Math.round((ex.totalQty + qtyNum) * 1000) / 1000;
       ex.actNums.push(a.actNum);
     } else {
-      aggMap.set(mapKey, {
-        name: a.name,
-        pn: a.pn||'',
-        category: catKey,
-        unit,
-        totalQty: qtyNum,
-        actNums: [a.actNum]
-      });
+      aggMap.set(mapKey, { name: a.name, pn: a.pn||'', category: catKey, unit, totalQty: qtyNum, actNums: [a.actNum] });
     }
   }
 
-  // Видаляємо ВСІ записи що прийшли з актів або preloaded (не ручні)
+  // Рахуємо видачі з журналу (тільки не повернені)
+  const journal = await dbGetAll('journal');
+  const issuedMap = new Map();
+  for (const j of journal) {
+    if (j.returned) continue; // повернуті не рахуємо
+    const pnKey = (j.pn||'').trim().toLowerCase();
+    const catKey = j.category||'';
+    const mapKey = pnKey ? (pnKey + '|||' + catKey) : ('__name__' + (j.name||'').toLowerCase() + '|||' + catKey);
+    const jQty = parseFloat(String(j.qty||'0').replace(',','.')) || 0;
+    const jUnit = j.unit || 'шт';
+    if (issuedMap.has(mapKey)) {
+      const ex = issuedMap.get(mapKey);
+      // Конвертуємо до одиниць складу якщо потрібно
+      let addQty = jQty;
+      const stockUnit = aggMap.get(mapKey)?.unit || jUnit;
+      if (stockUnit !== jUnit) {
+        const conv = convertUnits(jQty, jUnit, stockUnit);
+        if (conv !== null) addQty = conv;
+      }
+      ex.qty = Math.round((ex.qty + addQty) * 1000) / 1000;
+    } else {
+      issuedMap.set(mapKey, { qty: jQty, unit: jUnit });
+    }
+  }
+
+  // Видаляємо всі записи що прийшли з актів або preloaded
   const existingInv = await dbGetAll('inventory');
   for (const item of existingInv) {
     const isFromAct = item.source === 'act' || /Акт AV\d+/.test(item.notes||'');
     if (isFromAct) await dbDelete('inventory', item.id);
   }
 
-  // Додаємо нові агреговані записи
+  // Додаємо нові записи: надходження мінус видачі
   let added = 0;
-  for (const [, agg] of aggMap) {
+  for (const [mapKey, agg] of aggMap) {
+    const issued = issuedMap.get(mapKey);
+    let stockQty = agg.totalQty;
+    if (issued) {
+      // Конвертуємо видані у одиниці складу
+      let issuedInStockUnit = issued.qty;
+      if (issued.unit !== agg.unit) {
+        const conv = convertUnits(issued.qty, issued.unit, agg.unit);
+        if (conv !== null) issuedInStockUnit = conv;
+      }
+      stockQty = Math.max(0, Math.round((agg.totalQty - issuedInStockUnit) * 1000) / 1000);
+    }
     await dbAdd('inventory', {
-      name: agg.name,
-      pn: agg.pn,
-      sn: '',
-      category: agg.category,
-      qty: agg.totalQty,
-      minQty: 0,
-      unit: agg.unit,
-      location: '',
+      name: agg.name, pn: agg.pn, sn: '', category: agg.category,
+      qty: stockQty, minQty: 0, unit: agg.unit, location: '',
       notes: agg.actNums.map(n => 'Акт ' + n).join(', '),
-      createdAt: now(),
-      source: 'act',
-      actNum: agg.actNums[0]
+      createdAt: now(), source: 'act', actNum: agg.actNums[0]
     });
     added++;
   }
 
-  showNotif(`✅ Синхронізовано: ${added} позицій на складі (з ${goodActs.length} актів)`);
+  showNotif(`✅ Синхронізовано: ${added} позицій (з урахуванням ${journal.filter(j=>!j.returned).length} видач)`);
   renderInventory();
   loadDashboard();
   await pushInventoryToSheets();
