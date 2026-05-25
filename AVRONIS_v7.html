@@ -499,6 +499,7 @@ select option { background: var(--surface2); }
       <div class="tabs">
         <button class="tab-btn active" onclick="filterRequests('new',this)">🔵 Нові</button>
         <button class="tab-btn" onclick="filterRequests('processing',this)">🟡 В роботі</button>
+        <button class="tab-btn" onclick="filterRequests('partial',this)">🟠 Частково</button>
         <button class="tab-btn" onclick="filterRequests('done',this)">🟢 Виконані</button>
         <button class="tab-btn" onclick="filterRequests('all',this)">Всі</button>
       </div>
@@ -510,24 +511,13 @@ select option { background: var(--surface2); }
       <div class="card">
         <div class="card-hdr">
           <div class="card-title">🔄 Журнал видач</div>
-          <button class="btn btn-ghost btn-sm" onclick="exportJournal()">📥 Експорт CSV</button>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="text" id="journal-search" placeholder="🔍 Пошук..." oninput="renderJournal()"
+              style="padding:6px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);width:200px">
+            <button class="btn btn-ghost btn-sm" onclick="exportJournal()">📥 Експорт CSV</button>
+          </div>
         </div>
-        <div class="tbl-wrap">
-          <table>
-            <thead><tr>
-              <th>Дата/час</th>
-              <th>Заявка №</th>
-              <th>Агрегат/Проект</th>
-              <th>PN</th>
-              <th>Найменування</th>
-              <th>К-сть</th>
-              <th>Виконавець</th>
-              <th>Кладовщик</th>
-              <th>Статус</th>
-            </tr></thead>
-            <tbody id="journal-tbody"></tbody>
-          </table>
-        </div>
+        <div id="journal-groups"></div>
       </div>
     </div>
 
@@ -2530,29 +2520,146 @@ async function printRequest(id) {
 // ===================== JOURNAL =====================
 async function renderJournal() {
   const entries = await dbGetAll('journal');
-  entries.sort((a,b)=>new Date(b.date)-new Date(a.date));
-  const tbody = document.getElementById('journal-tbody');
+  const search = (document.getElementById('journal-search')?.value || '').toLowerCase();
+  entries.sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  // Групуємо по reqNum
+  const groups = new Map();
+  for (const e of entries) {
+    const key = e.reqNum || ('—' + e.date?.slice(0,10));
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  }
+
+  const container = document.getElementById('journal-groups');
   if (!entries.length) {
-    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">🔄</div><div class="empty-title">Журнал порожній</div></div></td></tr>`;
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🔄</div><div class="empty-title">Журнал порожній</div></div>`;
     return;
   }
-  tbody.innerHTML = entries.map(e=>{
-    const returned = e.returned === true;
-    const statusCell = returned
-      ? `<td><span class="badge badge-ok" style="font-size:11px">↩ Повернено ${e.returnedAt ? fmtDate(e.returnedAt).split(' ')[0] : ''}</span></td>`
-      : `<td><button class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 8px" onclick="confirmReturn(${e.id})">↩ Повернути</button></td>`;
-    return `<tr style="${returned ? 'opacity:0.6;' : ''}">
-      <td style="font-size:12px">${fmtDate(e.date)}</td>
-      <td class="td-mono">${e.reqNum||'—'}</td>
-      <td>${e.aggregate||'—'} ${e.project?'/ '+e.project:''}</td>
-      <td class="td-mono">${e.pn||'—'}</td>
-      <td>${e.name}</td>
-      <td>${e.qty} ${e.unit||'шт'}</td>
-      <td>${e.executor||'—'}</td>
-      <td>${e.storekeeper||'—'}</td>
-      ${statusCell}
-    </tr>`;
-  }).join('');
+
+  let html = '';
+  for (const [reqNum, rows] of groups) {
+    const first = rows[0];
+    // Фільтрація пошуком
+    const matchSearch = !search ||
+      reqNum.toLowerCase().includes(search) ||
+      rows.some(r =>
+        (r.name||'').toLowerCase().includes(search) ||
+        (r.pn||'').toLowerCase().includes(search) ||
+        (r.aggregate||'').toLowerCase().includes(search) ||
+        (r.executor||'').toLowerCase().includes(search)
+      );
+    if (!matchSearch) continue;
+
+    const allReturned = rows.every(r => r.returned);
+    const someReturned = rows.some(r => r.returned);
+
+    html += `<div style="border:1px solid var(--border);border-radius:8px;margin-bottom:12px;overflow:hidden">
+      <div style="background:var(--surface2);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <span style="font-weight:700;color:var(--accent);font-size:14px">${reqNum}</span>
+          <span style="margin-left:12px;color:var(--text2);font-size:12px">📅 ${fmtDate(first.date).split(' ')[0]}</span>
+          <span style="margin-left:10px;font-size:12px">⚙️ ${first.aggregate||'—'}${first.project?' / '+first.project:''}</span>
+          <span style="margin-left:10px;font-size:12px">👷 ${first.executor||'—'}</span>
+          <span style="margin-left:10px;font-size:12px">🗝️ ${first.storekeeper||'—'}</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          ${allReturned ? '<span class="badge badge-ok" style="font-size:11px">↩ Повністю повернено</span>' : someReturned ? '<span class="badge badge-warn" style="font-size:11px">⚠️ Частково повернено</span>' : ''}
+          <button class="btn btn-primary btn-sm" onclick="printJournalGroup('${reqNum}')" style="font-size:12px">🖨️ Накладна</button>
+        </div>
+      </div>
+      <div class="tbl-wrap" style="margin:0">
+        <table>
+          <thead><tr style="font-size:12px">
+            <th>PN</th><th>Найменування</th><th>К-сть</th><th>Статус</th>
+          </tr></thead>
+          <tbody>
+            ${rows.map(e => {
+              const returned = e.returned === true;
+              const statusCell = returned
+                ? `<span class="badge badge-ok" style="font-size:11px">↩ ${e.returnedAt ? fmtDate(e.returnedAt).split(' ')[0] : 'Повернено'}</span>`
+                : `<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:3px 8px" onclick="confirmReturn(${e.id})">↩ Повернути</button>`;
+              return `<tr style="${returned ? 'opacity:0.55;' : ''}">
+                <td class="td-mono" style="font-size:11px">${e.pn||'—'}</td>
+                <td>${e.name}</td>
+                <td>${e.qty} ${e.unit||'шт'}</td>
+                <td>${statusCell}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+
+  container.innerHTML = html || `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">Нічого не знайдено</div></div>`;
+}
+
+async function printJournalGroup(reqNumKey) {
+  const entries = await dbGetAll('journal');
+  const rows = entries.filter(e => (e.reqNum || ('—' + e.date?.slice(0,10))) === reqNumKey);
+  if (!rows.length) return;
+  const first = rows[0];
+
+  const html = `<div style="font-family:Arial,sans-serif;color:#000;max-width:720px">
+    <div style="text-align:center;margin-bottom:16px;border-bottom:2px solid #000;padding-bottom:10px">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px">Avronis FZE — Aviation MRO · Warehouse</div>
+      <h2 style="margin:6px 0;font-size:18px">ВИМОГА-НАКЛАДНА / MATERIAL ISSUE NOTE</h2>
+      <div style="font-size:13px">№ ${reqNumKey} від ${fmtDate(first.date).split(' ')[0]}</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:14px;font-size:12px">
+      <tr><td style="padding:3px 8px;font-weight:bold;width:40%">Виконавець / Executor:</td><td style="padding:3px 8px;border-bottom:1px solid #ccc">${first.executor||'—'}</td></tr>
+      <tr><td style="padding:3px 8px;font-weight:bold">Агрегат / Aggregate:</td><td style="padding:3px 8px;border-bottom:1px solid #ccc">${first.aggregate||'—'}${first.project?' / '+first.project:''}</td></tr>
+      <tr><td style="padding:3px 8px;font-weight:bold">Кладовщик / Storekeeper:</td><td style="padding:3px 8px;border-bottom:1px solid #ccc">${first.storekeeper||'—'}</td></tr>
+      <tr><td style="padding:3px 8px;font-weight:bold">Дата / Date:</td><td style="padding:3px 8px;border-bottom:1px solid #ccc">${fmtDate(first.date).split(' ')[0]}</td></tr>
+    </table>
+    <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:20px">
+      <thead>
+        <tr style="background:#f0f0f0">
+          <th style="border:1px solid #999;padding:5px 8px;text-align:center">№</th>
+          <th style="border:1px solid #999;padding:5px 8px">Позначення (P/N)</th>
+          <th style="border:1px solid #999;padding:5px 8px;text-align:left">Найменування</th>
+          <th style="border:1px solid #999;padding:5px 8px;text-align:center">К-сть</th>
+          <th style="border:1px solid #999;padding:5px 8px;text-align:center">Од.</th>
+          <th style="border:1px solid #999;padding:5px 8px;text-align:center">Підпис</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((e,i)=>`<tr>
+          <td style="border:1px solid #999;padding:4px 8px;text-align:center">${i+1}</td>
+          <td style="border:1px solid #999;padding:4px 8px;font-family:monospace;font-size:10px">${e.pn||'—'}</td>
+          <td style="border:1px solid #999;padding:4px 8px">${e.name}</td>
+          <td style="border:1px solid #999;padding:4px 8px;text-align:center">${e.qty}</td>
+          <td style="border:1px solid #999;padding:4px 8px;text-align:center">${e.unit||'шт'}</td>
+          <td style="border:1px solid #999;padding:4px 8px;width:60px"></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    <div style="display:flex;justify-content:space-between;margin-top:28px;font-size:12px">
+      <div>
+        <div>Видав кладовщик: _______________________</div>
+        <div style="margin-top:4px">ПІБ: ${first.storekeeper||'_______________________'}</div>
+        <div style="margin-top:16px">Підпис: _______________________</div>
+      </div>
+      <div>
+        <div>Отримав виконавець: _______________________</div>
+        <div style="margin-top:4px">ПІБ: ${first.executor||'_______________________'}</div>
+        <div style="margin-top:16px">Підпис: _______________________</div>
+      </div>
+    </div>
+    <div style="margin-top:20px;font-size:10px;color:#666;text-align:center;border-top:1px solid #ccc;padding-top:6px">
+      ${first.aggregate||''} · AVRONIS WMS · AMO-CiV
+    </div>
+  </div>`;
+
+  const w = window.open('','_blank','width=900,height=700');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    *{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:11px;color:#000;background:#fff;padding:15px}
+    @media print{body{padding:0}@page{margin:10mm;size:A4}}
+  </style></head><body>${html}</body></html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(()=>w.print(), 400);
 }
 
 async function exportJournal() {
