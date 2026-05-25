@@ -2430,15 +2430,6 @@ async function confirmIssue() {
       category: it.category || ''
     });
   }
-    await dbAdd('journal', {
-      date: now(),
-      reqId: req.id, reqNum: reqNum(req.id),
-      aggregate: req.aggregate, project: req.project,
-      pn: it.pn, name: it.name, qty: it.qty, unit: it.unit||'шт',
-      executor: req.executor, storekeeper, workplace: req.workplace,
-      category: it.category || ''
-    });
-  }
 
   // Якщо є невидані позиції — залишаємо заявку зі статусом 'partial', оновлюємо items
   if (skippedItems.length > 0) {
