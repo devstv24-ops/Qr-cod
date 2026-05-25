@@ -306,6 +306,15 @@ select option { background: var(--surface2); }
 .toggle-track.on .toggle-thumb { left: 19px; }
 
 /* CHECKBOX */
+.inv-search-wrap { position: relative; }
+.inv-search-input { width: 100%; padding: 4px 8px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface2); color: var(--text); outline: none; font-family: inherit; }
+.inv-search-input:focus { border-color: var(--accent); }
+.inv-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: var(--surface); border: 1px solid var(--accent); border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 9999; box-shadow: var(--shadow); display: none; }
+.inv-dropdown.open { display: block; }
+.inv-dropdown-item { padding: 7px 10px; font-size: 12px; cursor: pointer; border-bottom: 1px solid var(--border2); }
+.inv-dropdown-item:hover { background: var(--surface2); }
+.inv-dropdown-item .inv-di-pn { font-family: monospace; color: var(--accent); font-size: 11px; }
+.inv-dropdown-item .inv-di-qty { float: right; color: var(--green); font-size: 11px; }
 .cb-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border2); cursor: pointer; }
 .cb-row:last-child { border-bottom: none; }
 .cb-row input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
@@ -2376,12 +2385,9 @@ async function openConfirmIssue(reqId) {
       return aMatch - bMatch;
     });
 
-    const selectedId = exactMatch ? exactMatch.id : '';
-    const options = `<option value="">— не списувати —</option>` +
-      sortedInv.map(i => {
-        const label = `${i.pn||'—'} · ${i.name} (${i.qty} ${i.unit||'шт'})`;
-        return `<option value="${i.id}" ${i.id === selectedId ? 'selected' : ''}>${label}</option>`;
-      }).join('');
+    const selectedLabel = exactMatch
+      ? `${exactMatch.pn||'—'} · ${exactMatch.name} (${exactMatch.qty} ${exactMatch.unit||'шт'})`
+      : '';
 
     return `<tr>
       <td style="text-align:center">
@@ -2398,11 +2404,17 @@ async function openConfirmIssue(reqId) {
           ${onStock === null ? 'disabled' : ''}>
         ${reqUnit}
       </td>
-      <td>
-        <select class="issue-inv-select" data-idx="${idx}"
-          style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);max-width:240px">
-          ${options}
-        </select>
+      <td style="min-width:220px">
+        <div class="inv-search-wrap">
+          <input type="text" class="inv-search-input issue-inv-search" data-idx="${idx}"
+            placeholder="🔍 Пошук позиції на складі..."
+            value="${selectedLabel}"
+            data-inv-id="${exactMatch ? exactMatch.id : ''}"
+            oninput="invSearchInput(this)"
+            onfocus="invSearchFocus(this)"
+            onblur="invSearchBlur(this)">
+          <div class="inv-dropdown" id="inv-dd-${idx}"></div>
+        </div>
         <div style="margin-top:3px">${statusBadge}</div>
       </td>
     </tr>`;
@@ -2415,8 +2427,99 @@ async function openConfirmIssue(reqId) {
 function toggleIssueRow(cb) {
   const row = cb.closest('tr');
   const qtyInput = row.querySelector('.issue-qty-input');
+  const searchInput = row.querySelector('.inv-search-input');
   if (qtyInput) qtyInput.disabled = !cb.checked;
+  if (searchInput) searchInput.disabled = !cb.checked;
   row.style.opacity = cb.checked ? '1' : '0.4';
+}
+
+let _invSearchCache = null;
+async function getInvForSearch() {
+  if (_invSearchCache) return _invSearchCache;
+  _invSearchCache = await dbGetAll('inventory');
+  return _invSearchCache;
+}
+
+function invSearchInput(el) {
+  const idx = el.dataset.idx;
+  const q = el.value.toLowerCase().trim();
+  el.dataset.invId = ''; // скидаємо вибір при введенні
+  showInvDropdown(idx, q);
+}
+
+function invSearchFocus(el) {
+  const idx = el.dataset.idx;
+  showInvDropdown(idx, el.value.toLowerCase().trim());
+}
+
+function invSearchBlur(el) {
+  const idx = el.dataset.idx;
+  // Затримка щоб клік на пункт встиг спрацювати
+  setTimeout(() => {
+    const dd = document.getElementById('inv-dd-' + idx);
+    if (dd) dd.classList.remove('open');
+  }, 200);
+}
+
+async function showInvDropdown(idx, q) {
+  const dd = document.getElementById('inv-dd-' + idx);
+  if (!dd) return;
+  const inv = await getInvForSearch();
+
+  // Агрегуємо по pn+name (як у renderInventory)
+  const seen = new Map();
+  for (const i of inv) {
+    const key = (i.pn||'').toLowerCase().trim() + '|||' + (i.name||'').toLowerCase();
+    if (!seen.has(key)) seen.set(key, i);
+    else {
+      const ex = seen.get(key);
+      ex.qty = Math.round(((parseFloat(ex.qty)||0) + (parseFloat(i.qty)||0)) * 1000) / 1000;
+    }
+  }
+  let items = [...seen.values()];
+
+  if (q) {
+    items = items.filter(i =>
+      (i.pn||'').toLowerCase().includes(q) ||
+      (i.name||'').toLowerCase().includes(q)
+    );
+  }
+  items = items.slice(0, 50); // макс 50 результатів
+
+  if (!items.length) {
+    dd.innerHTML = '<div class="inv-dropdown-item" style="color:var(--text2)">Нічого не знайдено</div>';
+  } else {
+    dd.innerHTML = '<div class="inv-dropdown-item" style="color:var(--text2);font-style:italic" onmousedown="selectInvItem(' + idx + ', \'\', \'— не списувати —\')">— не списувати —</div>' +
+      items.map(i => {
+        const label = `${i.pn||'—'} · ${i.name}`;
+        const qty = `${i.qty} ${i.unit||'шт'}`;
+        return `<div class="inv-dropdown-item" onmousedown="selectInvItem(${idx}, ${i.id}, '${label.replace(/'/g,"\\'")}', '${qty}')">
+          <span class="inv-di-pn">${i.pn||'—'}</span>
+          <span class="inv-di-qty">${qty}</span>
+          <div style="color:var(--text);font-size:12px;margin-top:2px">${i.name}</div>
+        </div>`;
+      }).join('');
+  }
+  dd.classList.add('open');
+}
+
+function selectInvItem(idx, invId, label, qty) {
+  const searchEl = document.querySelector(`.inv-search-input[data-idx="${idx}"]`);
+  const dd = document.getElementById('inv-dd-' + idx);
+  if (searchEl) {
+    searchEl.value = invId ? `${label} (${qty})` : '';
+    searchEl.dataset.invId = invId || '';
+    // Розблоковуємо поле кількості якщо вибрали позицію
+    const row = searchEl.closest('tr');
+    const qtyInput = row?.querySelector('.issue-qty-input');
+    if (qtyInput) qtyInput.disabled = !invId;
+    const cb = row?.querySelector('.issue-cb');
+    if (cb) cb.checked = !!invId;
+    row.style.opacity = invId ? '1' : '0.4';
+  }
+  if (dd) dd.classList.remove('open');
+  // Скидаємо кеш щоб наступного разу читати свіжі дані
+  _invSearchCache = null;
 }
 
 async function confirmIssue() {
@@ -2436,10 +2539,10 @@ async function confirmIssue() {
   req.items.forEach((it, idx) => {
     const cb = document.querySelector(`.issue-cb[data-idx="${idx}"]`);
     const qtyInput = document.querySelector(`.issue-qty-input[data-idx="${idx}"]`);
-    const invSelect = document.querySelector(`.issue-inv-select[data-idx="${idx}"]`);
+    const invSearch = document.querySelector(`.inv-search-input[data-idx="${idx}"]`);
     if (cb && cb.checked) {
       const actualQty = parseFloat(qtyInput?.value || it.qty) || it.qty;
-      const selectedInvId = invSelect ? parseInt(invSelect.value) : null;
+      const selectedInvId = invSearch?.dataset.invId ? parseInt(invSearch.dataset.invId) : null;
       issuedItems.push({...it, qty: actualQty, _selectedInvId: selectedInvId || null});
     } else {
       skippedItems.push(it);
