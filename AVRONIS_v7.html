@@ -2341,23 +2341,41 @@ async function openConfirmIssue(reqId) {
   tbody.innerHTML = req.items.map((it, idx) => {
     const invItem = inv.find(i => i.pn && i.pn === it.pn) || inv.find(i => i.name === it.name);
     const onStock = invItem ? invItem.qty : null;
-    const enough = onStock === null ? false : onStock >= it.qty;
+    const stockUnit = invItem ? (invItem.unit||'шт') : (it.unit||'шт');
+    const reqUnit = it.unit || 'шт';
+
+    // Конвертуємо потрібну кількість у одиниці складу для порівняння
+    let reqInStockUnit = it.qty;
+    if (stockUnit !== reqUnit) {
+      const conv = convertUnits(it.qty, reqUnit, stockUnit);
+      if (conv !== null) reqInStockUnit = conv;
+    }
+    const enough = onStock === null ? false : onStock >= reqInStockUnit;
+
+    // Підказка конвертації
+    const convHint = (stockUnit !== reqUnit && onStock !== null)
+      ? `<div style="font-size:10px;color:var(--text2)">${it.qty} ${reqUnit} = ${reqInStockUnit} ${stockUnit}</div>` : '';
+
     const statusBadge = onStock === null
       ? '<span class="badge badge-grey" style="font-size:11px">Не на складі</span>'
-      : `<span class="badge ${enough ? 'badge-ok' : 'badge-danger'}">${onStock} ${invItem.unit||'шт'}</span>`;
+      : `<span class="badge ${enough ? 'badge-ok' : 'badge-danger'}">${onStock} ${stockUnit}</span>${convHint}`;
+
     return `<tr>
       <td style="text-align:center">
-        <input type="checkbox" class="issue-cb" data-idx="${idx}" ${onStock !== null ? 'checked' : ''}
+        <input type="checkbox" class="issue-cb" data-idx="${idx}"
+          data-stock-unit="${stockUnit}" data-req-unit="${reqUnit}"
+          ${onStock !== null ? 'checked' : ''}
           onchange="toggleIssueRow(this)" style="width:16px;height:16px;accent-color:var(--accent)">
       </td>
       <td class="td-mono" style="font-size:11px">${it.pn||'—'}</td>
       <td>${it.name}</td>
       <td style="text-align:center">
         <input type="number" class="issue-qty-input" data-idx="${idx}" data-max="${it.qty}"
+          data-stock-unit="${stockUnit}" data-req-unit="${reqUnit}"
           value="${it.qty}" min="0.001" step="0.001"
           style="width:65px;padding:3px 6px;font-size:12px;text-align:center;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text)"
           ${onStock === null ? 'disabled' : ''}>
-        ${it.unit||'шт'}
+        ${reqUnit}
       </td>
       <td>${statusBadge}</td>
     </tr>`;
@@ -2403,7 +2421,15 @@ async function confirmIssue() {
   for (const it of issuedItems) {
     const invItem = inv.find(i => i.pn && i.pn === it.pn) || inv.find(i => i.name === it.name);
     if (invItem) {
-      invItem.qty = Math.max(0, Math.round((invItem.qty - it.qty) * 10000) / 10000);
+      const stockUnit = invItem.unit || 'шт';
+      const reqUnit = it.unit || 'шт';
+      let deductQty = it.qty;
+      // Конвертуємо у одиниці складу якщо відрізняються
+      if (stockUnit !== reqUnit) {
+        const conv = convertUnits(it.qty, reqUnit, stockUnit);
+        if (conv !== null) deductQty = conv;
+      }
+      invItem.qty = Math.max(0, Math.round((invItem.qty - deductQty) * 10000) / 10000);
       await dbPut('inventory', invItem);
     }
     await dbAdd('journal', {
