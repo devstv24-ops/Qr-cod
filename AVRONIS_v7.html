@@ -2385,9 +2385,7 @@ async function openConfirmIssue(reqId) {
       return aMatch - bMatch;
     });
 
-    const selectedLabel = exactMatch
-      ? `${exactMatch.pn||'—'} · ${exactMatch.name} (${exactMatch.qty} ${exactMatch.unit||'шт'})`
-      : '';
+    const selectedId = exactMatch ? exactMatch.id : '';
 
     return `<tr>
       <td style="text-align:center">
@@ -2404,17 +2402,17 @@ async function openConfirmIssue(reqId) {
           ${onStock === null ? 'disabled' : ''}>
         ${reqUnit}
       </td>
-      <td style="min-width:220px">
-        <div class="inv-search-wrap">
-          <input type="text" class="inv-search-input issue-inv-search" data-idx="${idx}"
-            placeholder="🔍 Пошук позиції на складі..."
-            value="${selectedLabel}"
-            data-inv-id="${exactMatch ? exactMatch.id : ''}"
-            oninput="invSearchInput(this)"
-            onfocus="invSearchFocus(this)"
-            onblur="invSearchBlur(this)">
-          <div class="inv-dropdown" id="inv-dd-${idx}"></div>
-        </div>
+      <td style="min-width:260px">
+        <input type="text" placeholder="🔍 фільтр..." oninput="filterInvSelect(this, ${idx})"
+          style="width:100%;margin-bottom:4px;padding:4px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);outline:none;font-family:inherit">
+        <select class="issue-inv-select" data-idx="${idx}"
+          style="width:100%;padding:5px 6px;font-size:12px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text)">
+          <option value="">— не списувати —</option>
+          ${sortedInv.map(i => {
+            const label = `${i.pn||'—'} · ${i.name} (${i.qty} ${i.unit||'шт'})`;
+            return `<option value="${i.id}" ${i.id === selectedId ? 'selected' : ''}>${label}</option>`;
+          }).join('')}
+        </select>
         <div style="margin-top:3px">${statusBadge}</div>
       </td>
     </tr>`;
@@ -2433,13 +2431,15 @@ function toggleIssueRow(cb) {
   row.style.opacity = cb.checked ? '1' : '0.4';
 }
 
-function invSearchInput(el) {
-  el.dataset.invId = '';
-  const idx = el.dataset.idx;
-  const q = el.value.toLowerCase().trim();
-  showInvDropdown(idx, q, el);
+function filterInvSelect(filterInput, idx) {
+  const q = filterInput.value.toLowerCase();
+  const sel = document.querySelector(`.issue-inv-select[data-idx="${idx}"]`);
+  if (!sel) return;
+  Array.from(sel.options).forEach(opt => {
+    if (!opt.value) { opt.style.display = ''; return; } // "не списувати" завжди видно
+    opt.style.display = opt.text.toLowerCase().includes(q) ? '' : 'none';
+  });
 }
-
 function invSearchFocus(el) {
   const idx = el.dataset.idx;
   showInvDropdown(idx, el.value.toLowerCase().trim(), el);
@@ -2548,10 +2548,10 @@ async function confirmIssue() {
   req.items.forEach((it, idx) => {
     const cb = document.querySelector(`.issue-cb[data-idx="${idx}"]`);
     const qtyInput = document.querySelector(`.issue-qty-input[data-idx="${idx}"]`);
-    const invSearch = document.querySelector(`.inv-search-input[data-idx="${idx}"]`);
+    const invSelect = document.querySelector(`.issue-inv-select[data-idx="${idx}"]`);
     if (cb && cb.checked) {
       const actualQty = parseFloat(qtyInput?.value || it.qty) || it.qty;
-      const selectedInvId = invSearch?.dataset.invId ? parseInt(invSearch.dataset.invId) : null;
+      const selectedInvId = invSelect?.value ? parseInt(invSelect.value) : null;
       issuedItems.push({...it, qty: actualQty, _selectedInvId: selectedInvId || null});
     } else {
       skippedItems.push(it);
