@@ -1025,10 +1025,10 @@ select option { background: var(--surface2); }
           <input type="text" id="storekeeper-name" placeholder="Введіть ПІБ кладовщика">
         </div>
       </div>
-      <div style="font-size:13px;font-weight:600;margin-bottom:8px">Позиції до видачі:</div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px">Позиції до видачі: <span style="font-weight:400;color:var(--text2);font-size:12px">(зніміть галочку з позицій яких немає або не видаєте)</span></div>
       <div class="tbl-wrap">
         <table>
-          <thead><tr><th>PN</th><th>Найменування</th><th>Потрібно</th><th>На складі</th><th>Видати</th></tr></thead>
+          <thead><tr><th style="width:36px">✓</th><th>PN</th><th>Найменування</th><th>К-сть видати</th><th>На складі</th></tr></thead>
           <tbody id="confirm-issue-tbody"></tbody>
         </table>
       </div>
@@ -1120,9 +1120,45 @@ select option { background: var(--surface2); }
         </div>
         <div class="form-group">
           <label>Кількість *</label>
-          <input type="text" id="act-qty" placeholder="1 або 2,35 м">
+          <input type="text" id="act-qty" placeholder="напр. 1880" oninput="updateUnitConvert()">
+        </div>
+        <div class="form-group">
+          <label>Одиниця вимірю *</label>
+          <select id="act-unit" onchange="updateUnitConvert()">
+            <option value="шт">шт</option>
+            <option value="м">м</option>
+            <option value="мм">мм</option>
+            <option value="см">см</option>
+            <option value="к-т">к-т</option>
+            <option value="кг">кг</option>
+            <option value="г">г</option>
+            <option value="л">л</option>
+            <option value="мл">мл</option>
+          </select>
         </div>
       </div>
+      <!-- Row 3b: Одиниця обліку на складі (для конвертації) -->
+      <div class="form-row" id="unit-convert-row" style="display:none">
+        <div class="form-group full">
+          <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text2)">
+            <span style="color:var(--orange)">⚠️ Конвертація одиниць:</span>
+            Отримано <strong id="uc-from-qty"></strong> <strong id="uc-from-unit"></strong>
+            = <strong id="uc-to-qty" style="color:var(--green)"></strong> <strong id="uc-to-unit"></strong> на складі
+            &nbsp;|&nbsp;
+            <label style="cursor:pointer">Обліковувати на складі в:
+              <select id="act-stock-unit" onchange="updateUnitConvert()" style="margin-left:4px;padding:2px 6px;font-size:12px">
+                <option value="">— (не конвертувати) —</option>
+                <option value="мм">мм</option>
+                <option value="см">см</option>
+                <option value="м">м</option>
+                <option value="г">г</option>
+                <option value="кг">кг</option>
+                <option value="мл">мл</option>
+                <option value="л">л</option>
+              </select>
+            </label>
+          </div>
+        </div>
       <!-- Row 4: Результат -->
       <div class="form-row">
         <div class="form-group full">
@@ -2033,7 +2069,7 @@ async function renderRequests() {
           <div class="req-meta">👷 ${r.executor||'—'} · 🏭 ${r.workplace||'—'} · 📅 ${fmtDate(r.createdAt)}</div>
           ${r.note?`<div class="req-meta" style="margin-top:4px">💬 ${r.note}</div>`:''}
         </div>
-        <span class="badge ${r.status==='new'?'badge-info':r.status==='processing'?'badge-warn':'badge-ok'}">${r.status==='new'?'🔵 Нова':r.status==='processing'?'🟡 В роботі':'🟢 Виконана'}</span>
+        <span class="badge ${r.status==='new'?'badge-info':r.status==='processing'?'badge-warn':r.status==='partial'?'badge-warn':'badge-ok'}">${r.status==='new'?'🔵 Нова':r.status==='processing'?'🟡 В роботі':r.status==='partial'?'🟠 Частково':'🟢 Виконана'}</span>
       </div>
       <div class="req-parts">
         <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Позиції (${r.items.length}):</div>
@@ -2048,6 +2084,7 @@ async function renderRequests() {
       <div class="btn-group" style="margin-top:12px">
         ${r.status==='new'?`<button class="btn btn-warn btn-sm" onclick="setReqStatus(${r.id},'processing')">🔄 В роботу</button>`:''}
         ${r.status!=='done'?`<button class="btn btn-success btn-sm" onclick="openConfirmIssue(${r.id})">✅ Видати та списати</button>`:''}
+        ${r.status==='partial'&&r.partialNote?`<div style="font-size:11px;color:var(--orange);margin-top:4px">⚠️ ${r.partialNote}</div>`:''}
         <button class="btn btn-ghost btn-sm" onclick="openEditRequest(${r.id})">✏️ Редагувати</button>
         <button class="btn btn-primary btn-sm" onclick="printRequest(${r.id})">🖨️ Друкувати</button>
         <button class="btn btn-danger btn-sm" onclick="deleteRequest(${r.id})">🗑️</button>
@@ -2301,21 +2338,40 @@ async function openConfirmIssue(reqId) {
     👷 ${req.executor||'—'} · 📁 ${req.project||'—'} · 🏭 ${req.workplace||'—'}`;
 
   const tbody = document.getElementById('confirm-issue-tbody');
-  tbody.innerHTML = req.items.map(it=>{
-    const invItem = inv.find(i=>i.pn && i.pn===it.pn) || inv.find(i=>i.name===it.name);
+  tbody.innerHTML = req.items.map((it, idx) => {
+    const invItem = inv.find(i => i.pn && i.pn === it.pn) || inv.find(i => i.name === it.name);
     const onStock = invItem ? invItem.qty : null;
-    const enough = onStock===null ? '❓' : onStock >= it.qty ? '✅' : '⚠️';
+    const enough = onStock === null ? false : onStock >= it.qty;
+    const statusBadge = onStock === null
+      ? '<span class="badge badge-grey" style="font-size:11px">Не на складі</span>'
+      : `<span class="badge ${enough ? 'badge-ok' : 'badge-danger'}">${onStock} ${invItem.unit||'шт'}</span>`;
     return `<tr>
-      <td class="td-mono">${it.pn||'—'}</td>
+      <td style="text-align:center">
+        <input type="checkbox" class="issue-cb" data-idx="${idx}" ${onStock !== null ? 'checked' : ''}
+          onchange="toggleIssueRow(this)" style="width:16px;height:16px;accent-color:var(--accent)">
+      </td>
+      <td class="td-mono" style="font-size:11px">${it.pn||'—'}</td>
       <td>${it.name}</td>
-      <td>${it.qty} ${it.unit||'шт'}</td>
-      <td>${onStock===null?'<span class="badge badge-grey">Не на складі</span>':`<span class="badge ${onStock>=it.qty?'badge-ok':'badge-danger'}">${onStock}</span>`}</td>
-      <td>${enough}</td>
+      <td style="text-align:center">
+        <input type="number" class="issue-qty-input" data-idx="${idx}" data-max="${it.qty}"
+          value="${it.qty}" min="0.001" step="0.001"
+          style="width:65px;padding:3px 6px;font-size:12px;text-align:center;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text)"
+          ${onStock === null ? 'disabled' : ''}>
+        ${it.unit||'шт'}
+      </td>
+      <td>${statusBadge}</td>
     </tr>`;
   }).join('');
 
   document.getElementById('storekeeper-name').value = '';
   openModal('modal-confirm-issue');
+}
+
+function toggleIssueRow(cb) {
+  const row = cb.closest('tr');
+  const qtyInput = row.querySelector('.issue-qty-input');
+  if (qtyInput) qtyInput.disabled = !cb.checked;
+  row.style.opacity = cb.checked ? '1' : '0.4';
 }
 
 async function confirmIssue() {
@@ -2325,36 +2381,62 @@ async function confirmIssue() {
   const req = await dbGet('requests', pendingIssueReqId);
   const inv = await dbGetAll('inventory');
 
-  // Write off stock
-  for (const it of req.items) {
-    const invItem = inv.find(i=>i.pn && i.pn===it.pn) || inv.find(i=>i.name===it.name);
+  // Збираємо тільки відмічені рядки з фактичною кількістю
+  const checkedBoxes = document.querySelectorAll('.issue-cb:checked');
+  if (!checkedBoxes.length) { showNotif('Оберіть хоча б одну позицію','err'); return; }
+
+  const issuedItems = [];
+  const skippedItems = [];
+
+  req.items.forEach((it, idx) => {
+    const cb = document.querySelector(`.issue-cb[data-idx="${idx}"]`);
+    const qtyInput = document.querySelector(`.issue-qty-input[data-idx="${idx}"]`);
+    if (cb && cb.checked) {
+      const actualQty = parseFloat(qtyInput?.value || it.qty) || it.qty;
+      issuedItems.push({...it, qty: actualQty});
+    } else {
+      skippedItems.push(it);
+    }
+  });
+
+  // Списуємо зі складу і пишемо в журнал тільки видані
+  for (const it of issuedItems) {
+    const invItem = inv.find(i => i.pn && i.pn === it.pn) || inv.find(i => i.name === it.name);
     if (invItem) {
-      invItem.qty = Math.max(0, invItem.qty - it.qty);
+      invItem.qty = Math.max(0, Math.round((invItem.qty - it.qty) * 10000) / 10000);
       await dbPut('inventory', invItem);
     }
-    // Journal entry
     await dbAdd('journal', {
       date: now(),
       reqId: req.id, reqNum: reqNum(req.id),
       aggregate: req.aggregate, project: req.project,
       pn: it.pn, name: it.name, qty: it.qty, unit: it.unit||'шт',
-      executor: req.executor, storekeeper, workplace: req.workplace
+      executor: req.executor, storekeeper, workplace: req.workplace,
+      category: it.category || ''
     });
   }
 
-  // Mark done
-  req.status = 'done';
-  req.storekeeper = storekeeper;
-  req.issuedAt = now();
-  await dbPut('requests', req);
+  // Якщо є невидані позиції — залишаємо заявку зі статусом 'partial', оновлюємо items
+  if (skippedItems.length > 0) {
+    req.items = skippedItems;
+    req.status = 'partial';
+    req.storekeeper = storekeeper;
+    req.partialIssuedAt = now();
+    req.partialNote = `Видано ${issuedItems.length} з ${issuedItems.length + skippedItems.length} позицій`;
+    await dbPut('requests', req);
+    showNotif(`⚠️ Часткова видача: видано ${issuedItems.length} позицій, ${skippedItems.length} — залишилось в заявці`);
+  } else {
+    req.status = 'done';
+    req.storekeeper = storekeeper;
+    req.issuedAt = now();
+    await dbPut('requests', req);
+    showNotif('✅ Видано! Залишки списано зі складу.');
+  }
 
   closeModal('modal-confirm-issue');
-  showNotif('✅ Видано! Залишки списано зі складу.');
   renderRequests();
   loadDashboard();
-  // Автоматично оновлюємо склад в Google Sheets
   pushInventoryToSheets();
-  // Offer to print
   setTimeout(()=>printRequest(req.id), 300);
 }
 
@@ -2573,6 +2655,37 @@ async function exportActsCSV() {
 
 
 // ===================== ACT CATEGORY CHANGE =====================
+// Unit conversion helpers
+const UNIT_TO_MM = { мм: 1, см: 10, м: 1000 };
+const UNIT_TO_G  = { г: 1, кг: 1000 };
+const UNIT_TO_ML = { мл: 1, л: 1000 };
+function convertUnits(qty, fromUnit, toUnit) {
+  if (fromUnit === toUnit) return qty;
+  if (UNIT_TO_MM[fromUnit] !== undefined && UNIT_TO_MM[toUnit] !== undefined)
+    return Math.round(qty * UNIT_TO_MM[fromUnit] / UNIT_TO_MM[toUnit] * 10000) / 10000;
+  if (UNIT_TO_G[fromUnit] !== undefined && UNIT_TO_G[toUnit] !== undefined)
+    return Math.round(qty * UNIT_TO_G[fromUnit] / UNIT_TO_G[toUnit] * 10000) / 10000;
+  if (UNIT_TO_ML[fromUnit] !== undefined && UNIT_TO_ML[toUnit] !== undefined)
+    return Math.round(qty * UNIT_TO_ML[fromUnit] / UNIT_TO_ML[toUnit] * 10000) / 10000;
+  return null;
+}
+function updateUnitConvert() {
+  const qtyRaw = parseFloat((document.getElementById("act-qty")?.value||"").replace(",","."));
+  const fromUnit = document.getElementById("act-unit")?.value||"шт";
+  const toUnit = document.getElementById("act-stock-unit")?.value||"";
+  const row = document.getElementById("unit-convert-row");
+  const measurableUnits = ["мм","см","м","г","кг","мл","л"];
+  const showConvert = measurableUnits.includes(fromUnit);
+  if (!showConvert||!toUnit){if(row)row.style.display="none";return;}
+  if(row)row.style.display="";
+  if(!isNaN(qtyRaw)&&toUnit&&toUnit!==fromUnit){
+    const result=convertUnits(qtyRaw,fromUnit,toUnit);
+    document.getElementById("uc-from-qty").textContent=qtyRaw;
+    document.getElementById("uc-from-unit").textContent=fromUnit;
+    document.getElementById("uc-to-qty").textContent=result!==null?result:"?";
+    document.getElementById("uc-to-unit").textContent=toUnit;
+  }
+}
 function onActCategoryChange() {
   const cat = document.getElementById('act-category').value;
   const info = document.getElementById('act-auto-info');
@@ -2646,6 +2759,12 @@ async function openActModal() {
   document.getElementById('act-num').value = await getNextActNum();
   ['act-name','act-pn','act-sn','act-inspector','act-supplier','act-docs','act-notes','act-po'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('act-qty').value = '';
+  const actUnitEl = document.getElementById('act-unit');
+  if (actUnitEl) actUnitEl.value = 'шт';
+  const stockUnitEl = document.getElementById('act-stock-unit');
+  if (stockUnitEl) stockUnitEl.value = '';
+  const ucRow = document.getElementById('unit-convert-row');
+  if (ucRow) ucRow.style.display = 'none';
   document.getElementById('act-category').value = '';
   document.getElementById('act-auto-info').style.display = 'none';
   document.querySelectorAll('input[name="act-result-radio"]').forEach(r => r.checked = r.value === '+');
@@ -2663,7 +2782,9 @@ async function editAct(id) {
   document.getElementById('act-category').value = a.category||'';
   document.getElementById('act-pn').value = a.pn||'';
   document.getElementById('act-sn').value = a.sn||'';
-  document.getElementById('act-qty').value = a.qty||'';
+  document.getElementById('act-qty').value = a.qty ? String(a.qty).replace(/[^\d.,]/g,'').trim() : '';
+  const actUnitEl = document.getElementById('act-unit');
+  if (actUnitEl) actUnitEl.value = a.unit || 'шт';
   document.getElementById('act-inspector').value = a.inspector||'';
   document.getElementById('act-supplier').value = a.supplier||'';
   document.getElementById('act-docs').value = a.docs||'';
@@ -2699,7 +2820,9 @@ async function saveAct() {
     name, category: cat,
     pn: document.getElementById('act-pn').value.trim(),
     sn: document.getElementById('act-sn')?.value.trim() || '',
-    qty: document.getElementById('act-qty')?.value.trim() || '1',
+    qty: (document.getElementById('act-qty')?.value.trim() || '1') + ' ' + (document.getElementById('act-unit')?.value || 'шт'),
+    unit: document.getElementById('act-unit')?.value || 'шт',
+    stockUnit: document.getElementById('act-stock-unit')?.value || '',
     result,
     inspector: document.getElementById('act-inspector')?.value.trim() || '',
     supplier: document.getElementById('act-supplier')?.value.trim() || '',
@@ -2720,9 +2843,17 @@ async function saveAct() {
     savedId = await dbAdd('acts', obj);
     // Додаємо на склад якщо результат + (всі категорії)
     if (result === '+') {
-      const qtyStr = obj.qty.toString().replace(/[^\d.,]/g,'');
-      const qtyNum = parseFloat(qtyStr.replace(',','.')) || 1;
-      const unit = obj.qty.toString().includes('м') ? 'м' : (obj.qty.toString().includes('к-т') ? 'к-т' : 'шт');
+      const rawQty = parseFloat((document.getElementById('act-qty')?.value || '1').replace(',','.')) || 1;
+      const actUnitVal = document.getElementById('act-unit')?.value || 'шт';
+      const stockUnitVal = document.getElementById('act-stock-unit')?.value || '';
+
+      // Конвертація якщо задано одиницю обліку на складі
+      let stockQty = rawQty;
+      let stockUnit = actUnitVal;
+      if (stockUnitVal && stockUnitVal !== actUnitVal) {
+        const converted = convertUnits(rawQty, actUnitVal, stockUnitVal);
+        if (converted !== null) { stockQty = converted; stockUnit = stockUnitVal; }
+      }
       // Перевіряємо чи вже є така позиція на складі (по pn або назві)
       const existing = await dbGetAll('inventory');
       const found = existing.find(i =>
@@ -2730,20 +2861,18 @@ async function saveAct() {
         (!obj.pn && i.name.toLowerCase() === name.toLowerCase() && i.category === cat)
       );
       if (found) {
-        // Додаємо до існуючої кількості
-        found.qty = (parseFloat(found.qty) || 0) + qtyNum;
+        found.qty = Math.round(((parseFloat(found.qty) || 0) + stockQty) * 1000) / 1000;
         found.notes = (found.notes ? found.notes + ', ' : '') + `Акт ${actNum}`;
         await dbPut('inventory', found);
-        showNotif(`✅ Акт збережено. Склад: +${qtyNum} до існуючої позиції`);
+        showNotif(`✅ Акт збережено. Склад: +${stockQty} ${stockUnit} до існуючої позиції`);
       } else {
-        // Створюємо нову позицію
         await dbAdd('inventory', {
           name, pn: obj.pn, sn: obj.sn, category: cat,
-          qty: qtyNum, minQty: 0,
-          unit, location: obj.storage || '', notes: `Акт ${actNum}`,
+          qty: stockQty, minQty: 0,
+          unit: stockUnit, location: obj.storage || '', notes: `Акт ${actNum}`,
           createdAt: obj.date, source: 'act', actNum
         });
-        showNotif(`✅ Акт збережено + додано на склад`);
+        showNotif(`✅ Акт збережено + додано на склад: ${stockQty} ${stockUnit}`);
       }
     } else {
       showNotif('Акт збережено');
@@ -2808,7 +2937,10 @@ function printCurrentContent() {
     td, th { border: 1px solid #000; padding: 3px 5px; }
     .section-header { background: #e0e0e0 !important; font-weight: bold; text-align: center; }
     .page-break { page-break-after: always; }
-    @media print { body { margin: 0; } }
+    @media print {
+      body { margin: 0; }
+      @page { margin: 10mm; size: A4; }
+    }
   </style></head><body>${content}</body></html>`);
   w.document.close();
   w.focus();
