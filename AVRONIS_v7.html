@@ -2410,7 +2410,9 @@ async function openConfirmIssue(reqId) {
           <option value="">— не списувати —</option>
           ${sortedInv.map(i => {
             const label = `${i.pn||'—'} · ${i.name} (${i.qty} ${i.unit||'шт'})`;
-            return `<option value="${i.id}" ${i.id === selectedId ? 'selected' : ''}>${label}</option>`;
+            const val = encodeURIComponent((i.pn||'') + '|||' + (i.name||'') + '|||' + (i.unit||'шт'));
+            const isSelected = exactMatch && (i.pn||'').toLowerCase().trim() === (exactMatch.pn||'').toLowerCase().trim() && i.name === exactMatch.name;
+            return `<option value="${val}" ${isSelected ? 'selected' : ''}>${label}</option>`;
           }).join('')}
         </select>
         <div style="margin-top:3px">${statusBadge}</div>
@@ -2548,11 +2550,20 @@ async function confirmIssue() {
   req.items.forEach((it, idx) => {
     const cb = document.querySelector(`.issue-cb[data-idx="${idx}"]`);
     const qtyInput = document.querySelector(`.issue-qty-input[data-idx="${idx}"]`);
-    const invSelect = document.querySelector(`.issue-inv-select[data-idx="${idx}"]`);
+    const invSelectEl = document.querySelector(`.issue-inv-select[data-idx="${idx}"]`);
     if (cb && cb.checked) {
       const actualQty = parseFloat(qtyInput?.value || it.qty) || it.qty;
-      const selectedInvId = invSelect?.value ? parseInt(invSelect.value) : null;
-      issuedItems.push({...it, qty: actualQty, _selectedInvId: selectedInvId || null});
+      const selVal = invSelectEl?.value || '';
+      let _selPn = null, _selName = null, _selUnit = null;
+      if (selVal) {
+        try {
+          const parts = decodeURIComponent(selVal).split('|||');
+          _selPn = parts[0] || null;
+          _selName = parts[1] || null;
+          _selUnit = parts[2] || null;
+        } catch(e) {}
+      }
+      issuedItems.push({...it, qty: actualQty, _selPn, _selName, _selUnit});
     } else {
       skippedItems.push(it);
     }
@@ -2560,14 +2571,27 @@ async function confirmIssue() {
 
   // Списуємо зі складу і пишемо в журнал тільки видані
   for (const it of issuedItems) {
-    // Використовуємо вибрану кладовщиком позицію зі складу
-    const invItem = it._selectedInvId
-      ? inv.find(i => i.id === it._selectedInvId)
-      : (inv.find(i => (i.pn||'').toLowerCase().trim().replace(/\s+/g,' ') === (it.pn||'').toLowerCase().trim().replace(/\s+/g,' ') && it.pn) || inv.find(i => i.name === it.name));
+    let invItem = null;
+    if (it._selPn || it._selName) {
+      // Шукаємо по вибраному pn+name зі складу
+      const pnNorm = (it._selPn||'').toLowerCase().trim().replace(/\s+/g,' ');
+      const nameNorm = (it._selName||'').toLowerCase().trim();
+      invItem = inv.find(i =>
+        (pnNorm && (i.pn||'').toLowerCase().trim().replace(/\s+/g,' ') === pnNorm) ||
+        (!pnNorm && (i.name||'').toLowerCase().trim() === nameNorm)
+      );
+    }
+    if (!invItem) {
+      // Fallback: шукаємо по pn позиції заявки
+      const pnNorm = (it.pn||'').toLowerCase().trim().replace(/\s+/g,' ');
+      invItem = pnNorm
+        ? inv.find(i => (i.pn||'').toLowerCase().trim().replace(/\s+/g,' ') === pnNorm)
+        : inv.find(i => (i.name||'').toLowerCase().trim() === (it.name||'').toLowerCase().trim());
+    }
 
     if (invItem) {
       const stockUnit = invItem.unit || 'шт';
-      const reqUnit = it.unit || 'шт';
+      const reqUnit = it._selUnit || it.unit || 'шт';
       let deductQty = it.qty;
       if (stockUnit !== reqUnit) {
         const conv = convertUnits(it.qty, reqUnit, stockUnit);
