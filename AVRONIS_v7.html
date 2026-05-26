@@ -2605,6 +2605,22 @@ async function confirmIssue() {
       invItem.qty = Math.max(0, Math.round((invItem.qty - deductQty) * 10000) / 10000);
       await dbPut('inventory', invItem);
     }
+    // Знаходимо акт ВК для цієї позиції (щоб знати постачальника)
+    let sourceActNum = '';
+    let sourceSupplier = '';
+    if (invItem) {
+      const actNums = (invItem.notes||'').match(/AV[\d]+/g) || [];
+      if (actNums.length > 0) {
+        const dbActs = await dbGetAll('acts');
+        const allActs = dbActs.length > 0 ? dbActs : PRELOADED_ACTS;
+        const sourceAct = allActs.find(a => a.actNum === actNums[actNums.length - 1] && a.result === '+');
+        if (sourceAct) {
+          sourceActNum = sourceAct.actNum;
+          sourceSupplier = sourceAct.supplier || '';
+        }
+      }
+    }
+
     await dbAdd('journal', {
       date: now(),
       reqId: req.id, reqNum: reqNum(req.id),
@@ -2613,7 +2629,8 @@ async function confirmIssue() {
       name: invItem ? (invItem.name || it.name) : it.name,
       qty: it.qty, unit: it._selUnit || it.unit||'шт',
       executor: req.executor, storekeeper, workplace: req.workplace,
-      category: invItem ? (invItem.category || it.category || '') : (it.category || '')
+      category: invItem ? (invItem.category || it.category || '') : (it.category || ''),
+      sourceActNum, sourceSupplier
     });
   }
 
@@ -2739,6 +2756,8 @@ async function renderJournal() {
 
     const allReturned = rows.every(r => r.returned);
     const someReturned = rows.some(r => r.returned);
+    const hasUnreturned = rows.some(r => !r.returned);
+    const unreturnedIds = rows.filter(r => !r.returned).map(r => r.id);
 
     html += `<div style="border:1px solid var(--border);border-radius:8px;margin-bottom:12px;overflow:hidden">
       <div style="background:var(--surface2);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -2749,19 +2768,23 @@ async function renderJournal() {
           <span style="margin-left:10px;font-size:12px">👷 ${first.executor||'—'}</span>
           <span style="margin-left:10px;font-size:12px">🗝️ ${first.storekeeper||'—'}</span>
         </div>
-        <div style="display:flex;gap:6px;align-items:center">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           ${allReturned ? '<span class="badge badge-ok" style="font-size:11px">↩ Повністю повернено</span>' : someReturned ? '<span class="badge badge-warn" style="font-size:11px">⚠️ Частково повернено</span>' : ''}
+          ${hasUnreturned ? `<button class="btn btn-warn btn-sm" onclick="confirmReturnAll(${JSON.stringify(unreturnedIds).replace(/"/g,"'")})" style="font-size:12px">↩ Повернути всі</button>` : ''}
           <button class="btn btn-primary btn-sm" onclick="printJournalGroup('${reqNum}')" style="font-size:12px">🖨️ Накладна</button>
         </div>
       </div>
       <div class="tbl-wrap" style="margin:0">
         <table>
-          <thead><tr style="font-size:12px">
-            <th>PN</th><th>Найменування</th><th>К-сть</th><th>Статус</th>
+          <thead><tr style="font-size:11px">
+            <th>PN</th><th>Найменування</th><th>К-сть</th><th>Акт ВК / Постачальник</th><th>Статус</th>
           </tr></thead>
           <tbody>
             ${rows.map(e => {
               const returned = e.returned === true;
+              const actInfo = e.sourceActNum
+                ? `<span style="font-family:monospace;font-size:11px;color:var(--accent)">${e.sourceActNum}</span>${e.sourceSupplier ? `<div style="font-size:10px;color:var(--text2)">${e.sourceSupplier}</div>` : ''}`
+                : `<span style="color:var(--text2);font-size:11px">—</span>`;
               const statusCell = returned
                 ? `<span class="badge badge-ok" style="font-size:11px">↩ ${e.returnedAt ? fmtDate(e.returnedAt).split(' ')[0] : 'Повернено'}</span>`
                 : `<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:3px 8px" onclick="confirmReturn(${e.id})">↩ Повернути</button>`;
@@ -2769,6 +2792,7 @@ async function renderJournal() {
                 <td class="td-mono" style="font-size:11px">${e.pn||'—'}</td>
                 <td>${e.name}</td>
                 <td>${e.qty} ${e.unit||'шт'}</td>
+                <td>${actInfo}</td>
                 <td>${statusCell}</td>
               </tr>`;
             }).join('')}
@@ -2779,6 +2803,21 @@ async function renderJournal() {
   }
 
   container.innerHTML = html || `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">Нічого не знайдено</div></div>`;
+}
+
+async function confirmReturnAll(ids) {
+  const idArr = Array.isArray(ids) ? ids : JSON.parse(ids);
+  if (!confirm(`Повернути всі ${idArr.length} невидані позиції на склад?`)) return;
+  for (const id of idArr) {
+    const entry = await dbGet('journal', id);
+    if (!entry || entry.returned) continue;
+    entry.returned = true;
+    entry.returnedAt = now();
+    await dbPut('journal', entry);
+  }
+  showNotif(`✅ Повернено ${idArr.length} позицій на склад`);
+  renderJournal();
+  await syncActsToInventory();
 }
 
 async function printJournalGroup(reqNumKey) {
