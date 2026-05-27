@@ -2725,14 +2725,18 @@ async function renderJournal() {
   let html = '';
   for (const [reqNum, rows] of groups) {
     const first = rows[0];
-    // Фільтрація пошуком
+    // Фільтрація пошуком — з нормалізацією pn
+    const searchNorm = normPn(search);
     const matchSearch = !search ||
       reqNum.toLowerCase().includes(search) ||
       rows.some(r =>
         (r.name||'').toLowerCase().includes(search) ||
         (r.pn||'').toLowerCase().includes(search) ||
+        normPn(r.pn).includes(searchNorm) ||
         (r.aggregate||'').toLowerCase().includes(search) ||
-        (r.executor||'').toLowerCase().includes(search)
+        (r.executor||'').toLowerCase().includes(search) ||
+        (r.sourceActNum||'').toLowerCase().includes(search) ||
+        (r.sourceSupplier||'').toLowerCase().includes(search)
       );
     if (!matchSearch) continue;
 
