@@ -466,6 +466,7 @@ select option { background: var(--surface2); }
       <div class="card">
         <div class="card-hdr">
           <div class="card-title">📦 Склад — Інвентар</div>
+          <span id="inv-counter" style="font-size:13px;color:var(--text2);font-weight:400"></span>
           <div class="btn-group">
             <button class="btn btn-primary btn-sm" onclick="openAddItemModal()">＋ Додати позицію</button>
           </div>
@@ -1898,6 +1899,10 @@ async function renderInventory() {
   filtered.sort((a,b)=>(a.category||'').localeCompare(b.category||'') || (a.pn||'').localeCompare(b.pn||''));
 
   const tbody = document.getElementById('inv-tbody');
+  // Оновлюємо лічильник
+  const counter = document.getElementById('inv-counter');
+  if (counter) counter.textContent = `Позицій на складі: ${items.length}`;
+
   if (!filtered.length) {
     tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">Позицій не знайдено</div></div></td></tr>`;
     return;
@@ -2346,13 +2351,9 @@ async function openConfirmIssue(reqId) {
 
   const tbody = document.getElementById('confirm-issue-tbody');
 
-  // Будуємо агрегований список складу для dropdown (по pn+name)
-  const aggInv = [];
-  const seen = new Set();
-  for (const i of inv) {
-    const key = normPn(i.pn) + '|||' + (i.name||'').toLowerCase();
-    if (!seen.has(key)) { seen.add(key); aggInv.push(i); }
-  }
+  // Кожен запис складу — окрема партія (акт), без дедуплікації
+  // Сортуємо: спочатку позиції з кількістю > 0
+  const aggInv = [...inv].sort((a,b) => (b.qty > 0 ? 1 : 0) - (a.qty > 0 ? 1 : 0));
 
   tbody.innerHTML = req.items.map((it, idx) => {
     const reqUnit = it.unit || 'шт';
@@ -2380,15 +2381,12 @@ async function openConfirmIssue(reqId) {
       ? '<span class="badge badge-grey" style="font-size:11px">Не знайдено</span>'
       : `<span class="badge ${enough ? 'badge-ok' : 'badge-danger'}">${onStock} ${stockUnit}</span>${convHint}`;
 
-    // Dropdown: тільки позиції з тим самим pn (для трасування), або всі якщо не знайдено
+    // Dropdown: показуємо тільки партії з тим самим pn (різні акти/постачальники)
+    // Якщо не знайдено — показуємо весь склад для ручного вибору
     const matchingInv = aggInv.filter(i => normPn(i.pn) === pnNorm && pnNorm);
     const sortedInv = matchingInv.length > 0
       ? matchingInv.sort((a,b) => (b.qty > 0 ? 1 : 0) - (a.qty > 0 ? 1 : 0))
-      : [...aggInv].sort((a,b) => {
-          const aM = normPn(a.pn) === pnNorm ? 0 : 1;
-          const bM = normPn(b.pn) === pnNorm ? 0 : 1;
-          return aM - bM;
-        });
+      : aggInv; // якщо pn не знайдено — показуємо весь склад
 
     const selectedId = exactMatch ? exactMatch.id : '';
 
@@ -2646,7 +2644,7 @@ async function confirmIssue() {
   renderRequests();
   loadDashboard();
   // Перераховуємо склад з нуля (надходження мінус видачі)
-  await syncActsToInventory();
+  renderInventory(); loadDashboard();
   setTimeout(()=>printRequest(req.id), 400);
 }
 
@@ -2808,7 +2806,7 @@ async function confirmReturnAll(ids) {
   }
   showNotif(`✅ Повернено ${idArr.length} позицій на склад`);
   renderJournal();
-  await syncActsToInventory();
+  renderInventory(); loadDashboard();
 }
 
 async function printJournalGroup(reqNumKey) {
@@ -2943,7 +2941,7 @@ async function executeReturn() {
   _pendingReturnId = null;
   showNotif(`✅ Повернено на склад: ${entry.name} — ${entry.qty} ${entry.unit||'шт'}`);
   renderJournal();
-  await syncActsToInventory();
+  renderInventory(); loadDashboard();
 }
 
 // ===================== ACTS =====================
@@ -3917,7 +3915,7 @@ async function preloadDataIfEmpty() {
     showNotif(`✅ Завантажено ${PRELOADED_INVENTORY.length} позицій на склад`);
   }
   // Синхронізуємо придатні акти на склад
-  await syncActsToInventory();
+  // sync removed - manual only
 }
 
 async function reloadActsFromPreloaded() {
@@ -3961,7 +3959,7 @@ async function fixJournalPns() {
 
   showNotif(`✅ Виправлено ${fixed} записів журналу`);
   if (fixed > 0) {
-    await syncActsToInventory();
+    renderInventory();
     renderJournal();
   }
 }
@@ -3971,43 +3969,28 @@ async function syncActsToInventory() {
   const acts = dbActs.length > 0 ? dbActs : PRELOADED_ACTS;
   const goodActs = acts.filter(a => a.result === '+' && a.actNum);
 
-  // Рахуємо видачі з журналу по actNum (тільки не повернені)
-  // Ключ: actNum → qty видано
-  const journal = await dbGetAll('journal');
-  const issuedByAct = new Map();
-  for (const j of journal) {
-    if (j.returned) continue;
-    const key = j.sourceActNum || '';
-    if (!key) continue;
-    const jQty = parseFloat(String(j.qty||'0').replace(',','.')) || 0;
-    issuedByAct.set(key, Math.round(((issuedByAct.get(key)||0) + jQty) * 1000) / 1000);
-  }
-
-  // Видаляємо всі записи що прийшли з актів
+  // Читаємо поточний склад
   const existingInv = await dbGetAll('inventory');
-  for (const item of existingInv) {
-    const isFromAct = item.source === 'act' || /Акт AV\d+/.test(item.notes||'');
-    if (isFromAct) await dbDelete('inventory', item.id);
-  }
 
-  // Додаємо ОКРЕМИЙ запис для кожного акту — без агрегації
+  // Індекс існуючих actNum на складі
+  const existingActNums = new Set(existingInv.map(i => i.actNum).filter(Boolean));
+
+  // Додаємо ТІЛЬКИ ті акти яких ще немає на складі — нічого не видаляємо
   let added = 0;
   for (const a of goodActs) {
+    if (existingActNums.has(a.actNum)) continue; // вже є — пропускаємо
+
     const qtyStr = String(a.qty||'1').replace(/[^\d.,]/g,'');
-    const qtyNum = parseFloat(qtyStr.replace(',','.')) || 1;
+    const qty = parseFloat(qtyStr.replace(',','.')) || 1;
     const unit = a.unit || (String(a.qty||'').includes('м') ? 'м' :
                  String(a.qty||'').includes('к-т') ? 'к-т' : 'шт');
-
-    // Відраховуємо видане з цього конкретного акту
-    const issued = issuedByAct.get(a.actNum) || 0;
-    let stockQty = Math.max(0, Math.round((qtyNum - issued) * 1000) / 1000);
 
     await dbAdd('inventory', {
       name: a.name,
       pn: a.pn || '',
       sn: a.sn || '',
       category: a.category,
-      qty: stockQty,
+      qty,
       minQty: 0,
       unit,
       location: '',
@@ -4021,10 +4004,10 @@ async function syncActsToInventory() {
     added++;
   }
 
-  showNotif(`✅ Синхронізовано: ${added} позицій (кожен акт — окремо)`);
+  const total = existingInv.length + added;
+  showNotif(`✅ Додано ${added} нових позицій. Всього на складі: ${total}`);
   renderInventory();
   loadDashboard();
-  await pushInventoryToSheets();
 }
 </script>
 </body>
