@@ -485,9 +485,10 @@ select option { background: var(--surface2); }
               <th>PN / Позначення</th>
               <th>Найменування</th>
               <th>Категорія</th>
+              <th>Акт ВК</th>
+              <th>Постачальник</th>
               <th>К-сть</th>
               <th>Мін.залишок</th>
-              <th>Стан</th>
               <th>Дії</th>
             </tr></thead>
             <tbody id="inv-tbody"></tbody>
@@ -1857,77 +1858,69 @@ async function renderInventory() {
   const search = document.getElementById('inv-search').value.toLowerCase();
   const cat = document.getElementById('inv-filter-cat').value;
 
-  // Агрегуємо: один рядок на pn+category (об'єднуємо дублікати)
-  const aggMap = new Map();
-  for (const item of items) {
-    const key = (item.pn||'').trim().toLowerCase() + '|||' + (item.category||'');
-    if (!key || key === '|||') {
-      // Позиції без pn — зберігаємо окремо по id
-      aggMap.set('__id__' + item.id, {...item, _ids: [item.id], _sources: []});
-      continue;
-    }
-    if (aggMap.has(key)) {
-      const ex = aggMap.get(key);
-      ex.qty = Math.round((ex.qty + (parseFloat(item.qty)||0)) * 1000) / 1000;
-      ex._ids.push(item.id);
-      // Парсимо акти з notes
-      const acts = (item.notes||'').match(/AV\d+[\/\d]*/g) || [];
-      ex._sources.push(...acts.map(a => ({actNum: a, itemId: item.id})));
-    } else {
-      const acts = (item.notes||'').match(/AV\d+[\/\d]*/g) || [];
-      aggMap.set(key, {
-        ...item,
-        qty: parseFloat(item.qty)||0,
-        _ids: [item.id],
-        _sources: acts.map(a => ({actNum: a, itemId: item.id}))
-      });
-    }
-  }
-  let aggregated = [...aggMap.values()];
-
-  // Fill categories
-  const cats = [...new Set(aggregated.map(i=>i.category).filter(Boolean))].sort();
-  const catSel = document.getElementById('inv-filter-cat');
-  const curCat = catSel.value;
-  catSel.innerHTML = '<option value="">Всі категорії</option>' + cats.map(c=>`<option ${c===curCat?'selected':''}>${c}</option>`).join('');
-
-  let filtered = aggregated;
-  if (search) filtered = filtered.filter(i=> (i.name||'').toLowerCase().includes(search)||(i.pn||'').toLowerCase().includes(search));
-  if (cat) filtered = filtered.filter(i=>i.category===cat);
-
-  // Сортуємо: за категорією, потім за pn
-  filtered.sort((a,b)=>(a.category||'').localeCompare(b.category||'') || (a.pn||'').localeCompare(b.pn||''));
-
-  const tbody = document.getElementById('inv-tbody');
   // Оновлюємо лічильник
   const counter = document.getElementById('inv-counter');
   if (counter) counter.textContent = `Позицій на складі: ${items.length}`;
 
+  // Категорії для фільтру
+  const cats = [...new Set(items.map(i=>i.category).filter(Boolean))].sort();
+  const catSel = document.getElementById('inv-filter-cat');
+  const curCat = catSel.value;
+  catSel.innerHTML = '<option value="">Всі категорії</option>' + cats.map(c=>`<option ${c===curCat?'selected':''}>${c}</option>`).join('');
+
+  let filtered = items;
+  if (search) filtered = filtered.filter(i=>
+    (i.name||'').toLowerCase().includes(search) ||
+    (i.pn||'').toLowerCase().includes(search) ||
+    (i.actNum||'').toLowerCase().includes(search) ||
+    (i.supplier||'').toLowerCase().includes(search)
+  );
+  if (cat) filtered = filtered.filter(i=>i.category===cat);
+
+  // Сортуємо: категорія → pn → actNum
+  filtered.sort((a,b)=>
+    (a.category||'').localeCompare(b.category||'') ||
+    (a.pn||'').localeCompare(b.pn||'') ||
+    (a.actNum||'').localeCompare(b.actNum||'')
+  );
+
+  const tbody = document.getElementById('inv-tbody');
+
   if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">Позицій не знайдено</div></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">Позицій не знайдено</div></div></td></tr>`;
     return;
   }
-  tbody.innerHTML = filtered.map(item=>{
-    const pct = item.minQty > 0 ? Math.min(100, Math.round(item.qty/item.minQty*100)) : 100;
-    const color = item.qty === 0 ? 'var(--red)' : item.qty <= item.minQty ? 'var(--orange)' : 'var(--green)';
-    const badge = item.qty === 0 ? 'badge-danger' : item.qty <= item.minQty ? 'badge-warn' : 'badge-ok';
-    const hasReceipts = item._sources && item._sources.length > 0;
-    const idsJson = JSON.stringify(item._ids).replace(/"/g,'&quot;');
+
+  tbody.innerHTML = filtered.map(item => {
+    const qty = parseFloat(item.qty) || 0;
+    const minQty = parseFloat(item.minQty) || 0;
+    const pct = minQty > 0 ? Math.min(100, Math.round(qty/minQty*100)) : 100;
+    const color = qty === 0 ? 'var(--red)' : qty <= minQty ? 'var(--orange)' : 'var(--green)';
+    const badge = qty === 0 ? 'badge-danger' : qty <= minQty ? 'badge-warn' : 'badge-ok';
+
+    const actCell = item.actNum
+      ? `<span class="td-mono" style="font-size:11px;color:var(--accent)">${item.actNum}</span>${item.actDate ? `<div style="font-size:10px;color:var(--text2)">${item.actDate.slice(0,10)}</div>` : ''}`
+      : '—';
+
+    const supplierCell = item.supplier
+      ? `<span style="font-size:11px">${item.supplier}</span>`
+      : '—';
+
     return `<tr>
-      <td class="td-mono">${item.pn||'—'}</td>
+      <td class="td-mono" style="font-size:12px">${item.pn||'—'}</td>
       <td>${item.name}</td>
-      <td><span class="badge badge-grey">${item.category||'—'}</span></td>
+      <td><span class="badge badge-grey" style="font-size:11px">${item.category||'—'}</span></td>
+      <td>${actCell}</td>
+      <td style="max-width:160px;white-space:normal">${supplierCell}</td>
       <td>
-        <span class="badge ${badge}">${item.qty} ${item.unit||'шт'}</span>
+        <span class="badge ${badge}">${qty} ${item.unit||'шт'}</span>
         <div class="stock-bar"><div class="stock-bar-fill" style="width:${pct}%;background:${color}"></div></div>
       </td>
-      <td>${item.minQty||0}</td>
-      <td>${item.location||'—'}</td>
+      <td>${minQty}</td>
       <td>
         <div class="btn-group">
-          ${hasReceipts ? `<button class="btn btn-ghost btn-icon btn-sm" onclick="showInvDetail(${item._ids[0]},'${(item.name||'').replace(/'/g,"\\'")}','${(item.pn||'').replace(/'/g,"\\'")}','${(item.category||'').replace(/'/g,"\\'")}',${item.qty},'${item.unit||'шт'}')" title="Надходження">📋</button>` : ''}
-          <button class="btn btn-ghost btn-icon btn-sm" onclick="editItem(${item._ids[0]})" title="Редагувати">✏️</button>
-          <button class="btn btn-danger btn-icon btn-sm" onclick="deleteItemGroup(${JSON.stringify(item._ids).replace(/"/g,"'")})" title="Видалити">🗑️</button>
+          <button class="btn btn-ghost btn-icon btn-sm" onclick="editItem(${item.id})" title="Редагувати">✏️</button>
+          <button class="btn btn-danger btn-icon btn-sm" onclick="deleteItem(${item.id})" title="Видалити">🗑️</button>
         </div>
       </td>
     </tr>`;
