@@ -524,7 +524,7 @@ select option { background: var(--surface2); }
           <div class="card-title">🔄 Журнал видач</div>
           <div style="display:flex;gap:8px;align-items:center">
             <input type="text" id="journal-search" placeholder="🔍 Пошук..."
-              oninput="renderJournal()" onchange="renderJournal()" onkeyup="renderJournal()"
+              oninput="renderJournal(this.value)" onchange="renderJournal(this.value)"
               style="padding:6px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);width:220px">
             <button class="btn btn-ghost btn-sm" onclick="exportJournal()">📥 Експорт CSV</button>
           </div>
@@ -2704,9 +2704,9 @@ async function printRequest(id) {
 }
 
 // ===================== JOURNAL =====================
-async function renderJournal() {
+async function renderJournal(searchVal) {
   const entries = await dbGetAll('journal');
-  const search = (document.getElementById('journal-search')?.value || '').toLowerCase();
+  const search = (searchVal !== undefined ? searchVal : (document.getElementById('journal-search')?.value || '')).toLowerCase();
   entries.sort((a,b) => new Date(b.date) - new Date(a.date));
 
   // Групуємо по reqNum
