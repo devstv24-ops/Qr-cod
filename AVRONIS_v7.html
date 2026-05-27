@@ -526,6 +526,7 @@ select option { background: var(--surface2); }
             <input type="text" id="journal-search" placeholder="🔍 Пошук..."
               oninput="renderJournal(this.value)" onchange="renderJournal(this.value)"
               style="padding:6px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);width:220px">
+            <span id="journal-count" style="font-size:12px;color:var(--accent)"></span>
             <button class="btn btn-ghost btn-sm" onclick="exportJournal()">📥 Експорт CSV</button>
           </div>
         </div>
@@ -2791,6 +2792,15 @@ async function renderJournal(searchVal) {
   }
 
   container.innerHTML = html || `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">Нічого не знайдено</div></div>`;
+
+  // Показуємо скільки груп знайдено
+  const countEl = document.getElementById('journal-count');
+  if (countEl) {
+    const groupCount = (html.match(/ЗАМ-/g)||[]).length;
+    countEl.textContent = search ? `Знайдено: ${groupCount} заявок` : '';
+  }
+  // Прокручуємо вгору щоб побачити результати
+  container.scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 async function confirmReturnAll(ids) {
