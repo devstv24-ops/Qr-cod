@@ -523,8 +523,9 @@ select option { background: var(--surface2); }
         <div class="card-hdr">
           <div class="card-title">🔄 Журнал видач</div>
           <div style="display:flex;gap:8px;align-items:center">
-            <input type="text" id="journal-search" placeholder="🔍 Пошук..." oninput="renderJournal()"
-              style="padding:6px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);width:200px">
+            <input type="text" id="journal-search" placeholder="🔍 Пошук..."
+              oninput="renderJournal()" onchange="renderJournal()" onkeyup="renderJournal()"
+              style="padding:6px 10px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);width:220px">
             <button class="btn btn-ghost btn-sm" onclick="exportJournal()">📥 Експорт CSV</button>
           </div>
         </div>
@@ -2728,15 +2729,16 @@ async function renderJournal() {
     // Фільтрація пошуком — з нормалізацією pn
     const searchNorm = normPn(search);
     const matchSearch = !search ||
-      reqNum.toLowerCase().includes(search) ||
+      (reqNum||'').toLowerCase().includes(search) ||
       rows.some(r =>
         (r.name||'').toLowerCase().includes(search) ||
         (r.pn||'').toLowerCase().includes(search) ||
-        normPn(r.pn).includes(searchNorm) ||
+        (searchNorm && normPn(r.pn).includes(searchNorm)) ||
         (r.aggregate||'').toLowerCase().includes(search) ||
         (r.executor||'').toLowerCase().includes(search) ||
         (r.sourceActNum||'').toLowerCase().includes(search) ||
-        (r.sourceSupplier||'').toLowerCase().includes(search)
+        (r.sourceSupplier||'').toLowerCase().includes(search) ||
+        (r.storekeeper||'').toLowerCase().includes(search)
       );
     if (!matchSearch) continue;
 
