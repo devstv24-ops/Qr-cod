@@ -2380,14 +2380,15 @@ async function openConfirmIssue(reqId) {
       ? '<span class="badge badge-grey" style="font-size:11px">Не знайдено</span>'
       : `<span class="badge ${enough ? 'badge-ok' : 'badge-danger'}">${onStock} ${stockUnit}</span>${convHint}`;
 
-    // Dropdown зі списком всього складу (відсортований: спочатку схожі)
-    const sortedInv = [...aggInv].sort((a, b) => {
-      const aNorm = normPn(a.pn);
-      const bNorm = normPn(b.pn);
-      const aMatch = aNorm === pnNorm || (a.name||'').toLowerCase() === nameNorm ? 0 : 1;
-      const bMatch = bNorm === pnNorm || (b.name||'').toLowerCase() === nameNorm ? 0 : 1;
-      return aMatch - bMatch;
-    });
+    // Dropdown: тільки позиції з тим самим pn (для трасування), або всі якщо не знайдено
+    const matchingInv = aggInv.filter(i => normPn(i.pn) === pnNorm && pnNorm);
+    const sortedInv = matchingInv.length > 0
+      ? matchingInv.sort((a,b) => (b.qty > 0 ? 1 : 0) - (a.qty > 0 ? 1 : 0))
+      : [...aggInv].sort((a,b) => {
+          const aM = normPn(a.pn) === pnNorm ? 0 : 1;
+          const bM = normPn(b.pn) === pnNorm ? 0 : 1;
+          return aM - bM;
+        });
 
     const selectedId = exactMatch ? exactMatch.id : '';
 
@@ -2406,16 +2407,19 @@ async function openConfirmIssue(reqId) {
           ${onStock === null ? 'disabled' : ''}>
         ${reqUnit}
       </td>
-      <td style="min-width:260px">
-        <input type="text" placeholder="🔍 фільтр..." oninput="filterInvSelect(this, ${idx})"
+      <td style="min-width:280px">
+        <input type="text" placeholder="🔍 фільтр по акту або постачальнику..." oninput="filterInvSelect(this, ${idx})"
           style="width:100%;margin-bottom:4px;padding:4px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);outline:none;font-family:inherit">
         <select class="issue-inv-select" data-idx="${idx}"
           style="width:100%;padding:5px 6px;font-size:12px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text)">
           <option value="">— не списувати —</option>
           ${sortedInv.map(i => {
-            const label = `${i.pn||'—'} · ${i.name} (${i.qty} ${i.unit||'шт'})`;
-            const val = encodeURIComponent((i.pn||'') + '|||' + (i.name||'') + '|||' + (i.unit||'шт'));
-            const isSelected = exactMatch && (i.pn||'').toLowerCase().trim() === (exactMatch.pn||'').toLowerCase().trim() && i.name === exactMatch.name;
+            const actTag = i.actNum ? ` [${i.actNum}]` : '';
+            const supplierTag = i.supplier ? ` | ${i.supplier}` : '';
+            const qtyTag = `${i.qty} ${i.unit||'шт'}`;
+            const label = `${i.pn||'—'}${actTag}${supplierTag} · ${i.name} (${qtyTag})`;
+            const val = encodeURIComponent([i.pn||'', i.name||'', i.unit||'шт', i.actNum||'', i.supplier||''].join('|||'));
+            const isSelected = exactMatch && i.id === exactMatch.id;
             return `<option value="${val}" ${isSelected ? 'selected' : ''}>${label}</option>`;
           }).join('')}
         </select>
@@ -2559,16 +2563,18 @@ async function confirmIssue() {
     if (cb && cb.checked) {
       const actualQty = parseFloat(qtyInput?.value || it.qty) || it.qty;
       const selVal = invSelectEl?.value || '';
-      let _selPn = null, _selName = null, _selUnit = null;
+      let _selPn = null, _selName = null, _selUnit = null, _selActNum = null, _selSupplier = null;
       if (selVal) {
         try {
           const parts = decodeURIComponent(selVal).split('|||');
           _selPn = parts[0] || null;
           _selName = parts[1] || null;
           _selUnit = parts[2] || null;
+          _selActNum = parts[3] || null;
+          _selSupplier = parts[4] || null;
         } catch(e) {}
       }
-      issuedItems.push({...it, qty: actualQty, _selPn, _selName, _selUnit});
+      issuedItems.push({...it, qty: actualQty, _selPn, _selName, _selUnit, _selActNum, _selSupplier});
     } else {
       skippedItems.push(it);
     }
@@ -2576,22 +2582,18 @@ async function confirmIssue() {
 
   // Списуємо зі складу і пишемо в журнал тільки видані
   for (const it of issuedItems) {
+    // Знаходимо запис складу — спочатку по actNum (точне трасування), потім по pn
     let invItem = null;
-    if (it._selPn || it._selName) {
-      // Шукаємо по вибраному pn+name зі складу
-      const pnNorm = normPn(it._selPn);
-      const nameNorm = (it._selName||'').toLowerCase().trim();
-      invItem = inv.find(i =>
-        (pnNorm && normPn(i.pn) === pnNorm) ||
-        (!pnNorm && (i.name||'').toLowerCase().trim() === nameNorm)
-      );
+    const pnNorm = normPn(it._selPn || it.pn || '');
+    if (it._selActNum) {
+      invItem = inv.find(i => i.actNum === it._selActNum && normPn(i.pn) === pnNorm);
+    }
+    if (!invItem && pnNorm) {
+      invItem = inv.find(i => normPn(i.pn) === pnNorm && i.qty > 0)
+             || inv.find(i => normPn(i.pn) === pnNorm);
     }
     if (!invItem) {
-      // Fallback: шукаємо по pn позиції заявки
-      const pnNorm = normPn(it.pn);
-      invItem = pnNorm
-        ? inv.find(i => normPn(i.pn) === pnNorm)
-        : inv.find(i => (i.name||'').toLowerCase().trim() === (it.name||'').toLowerCase().trim());
+      invItem = inv.find(i => normPn(i.name) === normPn(it._selName || it.name || ''));
     }
 
     if (invItem) {
@@ -2605,21 +2607,10 @@ async function confirmIssue() {
       invItem.qty = Math.max(0, Math.round((invItem.qty - deductQty) * 10000) / 10000);
       await dbPut('inventory', invItem);
     }
-    // Знаходимо акт ВК для цієї позиції (щоб знати постачальника)
-    let sourceActNum = '';
-    let sourceSupplier = '';
-    if (invItem) {
-      const actNums = (invItem.notes||'').match(/AV[\d]+/g) || [];
-      if (actNums.length > 0) {
-        const dbActs = await dbGetAll('acts');
-        const allActs = dbActs.length > 0 ? dbActs : PRELOADED_ACTS;
-        const sourceAct = allActs.find(a => a.actNum === actNums[actNums.length - 1] && a.result === '+');
-        if (sourceAct) {
-          sourceActNum = sourceAct.actNum;
-          sourceSupplier = sourceAct.supplier || '';
-        }
-      }
-    }
+
+    // Акт і постачальник — з вибору кладовщика або з invItem
+    const sourceActNum = it._selActNum || (invItem ? invItem.actNum : '') || '';
+    const sourceSupplier = it._selSupplier || (invItem ? invItem.supplier : '') || '';
 
     await dbAdd('journal', {
       date: now(),
@@ -3980,80 +3971,57 @@ async function syncActsToInventory() {
   const acts = dbActs.length > 0 ? dbActs : PRELOADED_ACTS;
   const goodActs = acts.filter(a => a.result === '+' && a.actNum);
 
-  // Будуємо агреговану таблицю надходжень: pnKey+category → totalQty
-  const aggMap = new Map();
-  for (const a of goodActs) {
-    const pnKey = normPn(a.pn||'');
-    const catKey = a.category||'';
-    const mapKey = pnKey ? (pnKey + '|||' + catKey) : ('__name__' + normPn(a.name) + '|||' + catKey);
-    const qtyStr = String(a.qty||'1').replace(/[^\d.,]/g,'');
-    const qtyNum = parseFloat(qtyStr.replace(',','.')) || 1;
-    const unit = String(a.qty||'').includes('к-т') ? 'к-т' :
-                 (a.unit || (String(a.qty||'').includes('м') ? 'м' : 'шт'));
-    if (aggMap.has(mapKey)) {
-      const ex = aggMap.get(mapKey);
-      ex.totalQty = Math.round((ex.totalQty + qtyNum) * 1000) / 1000;
-      ex.actNums.push(a.actNum);
-    } else {
-      aggMap.set(mapKey, { name: a.name, pn: a.pn||'', category: catKey, unit, totalQty: qtyNum, actNums: [a.actNum] });
-    }
-  }
-
-  // Рахуємо видачі з журналу (тільки не повернені)
+  // Рахуємо видачі з журналу по actNum (тільки не повернені)
+  // Ключ: actNum → qty видано
   const journal = await dbGetAll('journal');
-  const issuedMap = new Map();
+  const issuedByAct = new Map();
   for (const j of journal) {
     if (j.returned) continue;
-    // Нормалізуємо pn — прибираємо зайві пробіли, lowercase
-    const pnKey = normPn(j.pn||'');
-    const mapKey = pnKey ? pnKey : ('__name__' + normPn(j.name));
+    const key = j.sourceActNum || '';
+    if (!key) continue;
     const jQty = parseFloat(String(j.qty||'0').replace(',','.')) || 0;
-    const jUnit = j.unit || 'шт';
-    if (issuedMap.has(mapKey)) {
-      const ex = issuedMap.get(mapKey);
-      let addQty = jQty;
-      if (ex.unit !== jUnit) {
-        const conv = convertUnits(jQty, jUnit, ex.unit);
-        if (conv !== null) addQty = conv;
-      }
-      ex.qty = Math.round((ex.qty + addQty) * 1000) / 1000;
-    } else {
-      issuedMap.set(mapKey, { qty: jQty, unit: jUnit });
-    }
+    issuedByAct.set(key, Math.round(((issuedByAct.get(key)||0) + jQty) * 1000) / 1000);
   }
 
-  // Видаляємо всі записи що прийшли з актів або preloaded
+  // Видаляємо всі записи що прийшли з актів
   const existingInv = await dbGetAll('inventory');
   for (const item of existingInv) {
     const isFromAct = item.source === 'act' || /Акт AV\d+/.test(item.notes||'');
     if (isFromAct) await dbDelete('inventory', item.id);
   }
 
-  // Додаємо нові записи: надходження мінус видачі
+  // Додаємо ОКРЕМИЙ запис для кожного акту — без агрегації
   let added = 0;
-  for (const [mapKey, agg] of aggMap) {
-    // Шукаємо видачі по нормалізованому pn-ключу (normPn прибирає пробіли і *)
-    const pnLookup = agg.pn ? normPn(agg.pn) : ('__name__' + normPn(agg.name));
-    const issued = issuedMap.get(pnLookup);
-    let stockQty = agg.totalQty;
-    if (issued) {
-      let issuedInStockUnit = issued.qty;
-      if (issued.unit !== agg.unit) {
-        const conv = convertUnits(issued.qty, issued.unit, agg.unit);
-        if (conv !== null) issuedInStockUnit = conv;
-      }
-      stockQty = Math.max(0, Math.round((agg.totalQty - issuedInStockUnit) * 1000) / 1000);
-    }
+  for (const a of goodActs) {
+    const qtyStr = String(a.qty||'1').replace(/[^\d.,]/g,'');
+    const qtyNum = parseFloat(qtyStr.replace(',','.')) || 1;
+    const unit = a.unit || (String(a.qty||'').includes('м') ? 'м' :
+                 String(a.qty||'').includes('к-т') ? 'к-т' : 'шт');
+
+    // Відраховуємо видане з цього конкретного акту
+    const issued = issuedByAct.get(a.actNum) || 0;
+    let stockQty = Math.max(0, Math.round((qtyNum - issued) * 1000) / 1000);
+
     await dbAdd('inventory', {
-      name: agg.name, pn: agg.pn, sn: '', category: agg.category,
-      qty: stockQty, minQty: 0, unit: agg.unit, location: '',
-      notes: agg.actNums.map(n => 'Акт ' + n).join(', '),
-      createdAt: now(), source: 'act', actNum: agg.actNums[0]
+      name: a.name,
+      pn: a.pn || '',
+      sn: a.sn || '',
+      category: a.category,
+      qty: stockQty,
+      minQty: 0,
+      unit,
+      location: '',
+      notes: `Акт ${a.actNum}`,
+      createdAt: a.date || now(),
+      source: 'act',
+      actNum: a.actNum,
+      supplier: a.supplier || '',
+      actDate: a.date || ''
     });
     added++;
   }
 
-  showNotif(`✅ Синхронізовано: ${added} позицій (з урахуванням ${journal.filter(j=>!j.returned).length} видач)`);
+  showNotif(`✅ Синхронізовано: ${added} позицій (кожен акт — окремо)`);
   renderInventory();
   loadDashboard();
   await pushInventoryToSheets();
