@@ -699,8 +699,8 @@ select option { background: var(--surface2); }
           <table>
             <thead><tr>
               <th>№</th><th>Найменування</th><th>Тип / P/N</th><th>S/N</th>
-              <th>Діапазон</th><th>Місце</th>
-              <th>Остання повірка</th><th>Наступна повірка</th><th>Статус</th>
+              <th>Діапазон</th><th>Ділянка зберігання</th><th>Місце зберігання</th>
+              <th>Остання повірка</th><th>Наступна повірка</th><th>Статус</th><th>Дії</th>
             </tr></thead>
             <tbody id="meas-tbody"></tbody>
           </table>
@@ -1222,6 +1222,61 @@ select option { background: var(--surface2); }
   </div>
 </div>
 
+<!-- MEASURING INSTRUMENT EDIT MODAL -->
+<div class="modal-overlay" id="modal-meas-edit">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-hdr">
+      <div class="modal-title">✏️ Редагувати вимірювальний інструмент</div>
+      <button class="modal-close" onclick="closeModal('modal-meas-edit')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="meas-edit-sn">
+      <!-- Readonly info -->
+      <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px">
+        <div style="margin-bottom:6px"><span style="color:var(--text2)">Найменування:</span> <strong id="meas-edit-name-ro"></strong></div>
+        <div style="margin-bottom:6px"><span style="color:var(--text2)">Тип / P/N:</span> <span id="meas-edit-pn-ro" class="td-mono"></span></div>
+        <div style="margin-bottom:6px"><span style="color:var(--text2)">S/N:</span> <span id="meas-edit-sn-ro" class="td-mono" style="color:var(--accent)"></span></div>
+        <div><span style="color:var(--text2)">Діапазон:</span> <span id="meas-edit-range-ro"></span></div>
+      </div>
+      <!-- Editable fields -->
+      <div class="form-row">
+        <div class="form-group full">
+          <label>Ділянка зберігання</label>
+          <select id="meas-edit-location">
+            <option value="">— Оберіть ділянку —</option>
+            <option>Component Inspection and Electronic Repair Area</option>
+            <option>Warehouse and incoming inspection area</option>
+            <option>Component Assembly Area</option>
+            <option>Component Testing Area</option>
+            <option>Mechanical Disassembly and Repair Area</option>
+            <option>General-purpose tools</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group full">
+          <label>Місце зберігання (шухляда, полиця, відсік...)</label>
+          <input type="text" id="meas-edit-storage-place" placeholder="напр. Cabinet No. 2, Shelf 3">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Остання повірка</label>
+          <input type="date" id="meas-edit-last-cal">
+        </div>
+        <div class="form-group">
+          <label>Наступна повірка</label>
+          <input type="date" id="meas-edit-next-cal">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-meas-edit')">Скасувати</button>
+      <button class="btn btn-primary" onclick="saveMeasEdit()">💾 Зберегти</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOOL EDIT MODAL -->
 <div class="modal-overlay" id="modal-tool-edit">
   <div class="modal" style="max-width:500px">
@@ -1668,7 +1723,7 @@ const KITS = {
 // ===================== IndexedDB =====================
 let db;
 const DB_NAME = 'avronis_v2';
-const DB_VER = 2;
+const DB_VER = 3;
 
 function initDB() {
   return new Promise((res, rej) => {
@@ -1681,7 +1736,7 @@ function initDB() {
     req.onupgradeneeded = e => {
       const d = e.target.result;
       // Видаляємо старі сховища якщо є конфлікт
-      const stores = ['inventory','requests','journal','acts','tools_edits'];
+      const stores = ['inventory','requests','journal','acts','tools_edits','meas_edits'];
       stores.forEach(name => {
         if (d.objectStoreNames.contains(name)) d.deleteObjectStore(name);
       });
@@ -1691,6 +1746,8 @@ function initDB() {
       d.createObjectStore('journal',{keyPath:'id',autoIncrement:true});
       d.createObjectStore('acts',{keyPath:'id',autoIncrement:true});
       d.createObjectStore('tools_edits',{keyPath:'id',autoIncrement:true});
+      if (!d.objectStoreNames.contains('meas_edits'))
+        d.createObjectStore('meas_edits',{keyPath:'id',autoIncrement:true});
     };
     req.onsuccess = e => { db = e.target.result; res(db); };
     req.onerror = e => rej(e.target.error || e);
@@ -3840,13 +3897,22 @@ function exportToolsCSV() {
 
 
 // ===================== MEASURING =====================
-function renderMeasuring() {
+async function getMeasuringData() {
+  const stored = await dbGetAll('meas_edits');
+  const editsMap = {};
+  stored.forEach(e => { if (e.sn) editsMap[e.sn] = e; });
+  return PRELOADED_MEASURING.map(m => ({...m, ...(editsMap[m.sn] || {})}));
+}
+
+async function renderMeasuring() {
   const search = (document.getElementById('meas-search')?.value || '').toLowerCase();
   const statusF = document.getElementById('meas-filter-status')?.value || '';
   const today = new Date();
   const soon = new Date(); soon.setDate(soon.getDate() + 60);
-  
-  let filtered = PRELOADED_MEASURING.map(m => {
+
+  const allMeas = await getMeasuringData();
+
+  let filtered = allMeas.map(m => {
     let statusClass = 'badge-grey';
     let statusLabel = m.status || '—';
     if (!m.nextCal) {
@@ -3860,18 +3926,24 @@ function renderMeasuring() {
     return {...m, statusClass, statusLabel};
   });
 
-  if (search) filtered = filtered.filter(m => (m.name||'').toLowerCase().includes(search) || (m.pn||'').toLowerCase().includes(search) || (m.sn||'').toLowerCase().includes(search));
+  if (search) filtered = filtered.filter(m =>
+    (m.name||'').toLowerCase().includes(search) ||
+    (m.pn||'').toLowerCase().includes(search) ||
+    (m.sn||'').toLowerCase().includes(search) ||
+    (m.storagePlace||'').toLowerCase().includes(search) ||
+    (m.location||'').toLowerCase().includes(search)
+  );
   if (statusF === 'ok') filtered = filtered.filter(m => m.statusClass === 'badge-ok');
   else if (statusF === 'pending') filtered = filtered.filter(m => !m.nextCal);
   else if (statusF === 'soon') filtered = filtered.filter(m => m.statusClass === 'badge-warn' || m.statusClass === 'badge-danger');
 
   const cnt = document.getElementById('meas-count');
-  if (cnt) cnt.textContent = `Показано ${filtered.length} з ${PRELOADED_MEASURING.length} позицій`;
+  if (cnt) cnt.textContent = `Показано ${filtered.length} з ${allMeas.length} позицій`;
 
   const tbody = document.getElementById('meas-tbody');
   if (!tbody) return;
   if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">📐</div><div class="empty-title">Нічого не знайдено</div></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">📐</div><div class="empty-title">Нічого не знайдено</div></div></td></tr>';
     return;
   }
   tbody.innerHTML = filtered.map(m => `<tr>
@@ -3881,13 +3953,51 @@ function renderMeasuring() {
     <td class="td-mono" style="color:var(--accent)">${m.sn||'—'}</td>
     <td style="font-size:12px">${m.range||'—'}</td>
     <td style="font-size:11px;color:var(--text2)">${m.location||'—'}</td>
+    <td style="font-size:11px;color:var(--text2)">${m.storagePlace||'—'}</td>
     <td style="font-size:12px">${m.lastCal||'—'}</td>
     <td style="font-size:12px;font-weight:${m.statusClass==='badge-danger'?'700':'400'};color:${m.statusClass==='badge-danger'?'var(--red)':m.statusClass==='badge-warn'?'var(--orange)':'inherit'}">${m.nextCal||'—'}</td>
     <td><span class="badge ${m.statusClass}">${m.statusLabel}</span></td>
+    <td><button class="btn btn-ghost btn-icon btn-sm" onclick="openMeasEdit('${(m.sn||'').replace(/'/g,'')}')" title="Редагувати">✏️</button></td>
   </tr>`).join('');
 }
 
-function exportMeasuringCSV() {
+async function openMeasEdit(sn) {
+  const allMeas = await getMeasuringData();
+  const m = allMeas.find(x => x.sn === sn) || {};
+  document.getElementById('meas-edit-sn').value = sn;
+  // Readonly fields
+  document.getElementById('meas-edit-name-ro').textContent = m.name || '—';
+  document.getElementById('meas-edit-pn-ro').textContent = m.pn || '—';
+  document.getElementById('meas-edit-sn-ro').textContent = m.sn || '—';
+  document.getElementById('meas-edit-range-ro').textContent = m.range || '—';
+  // Editable fields
+  document.getElementById('meas-edit-location').value = m.location || '';
+  document.getElementById('meas-edit-storage-place').value = m.storagePlace || '';
+  document.getElementById('meas-edit-last-cal').value = m.lastCal || '';
+  document.getElementById('meas-edit-next-cal').value = m.nextCal || '';
+  openModal('modal-meas-edit');
+}
+
+async function saveMeasEdit() {
+  const sn = document.getElementById('meas-edit-sn').value;
+  const edit = {
+    sn,
+    location: document.getElementById('meas-edit-location').value,
+    storagePlace: document.getElementById('meas-edit-storage-place').value.trim(),
+    lastCal: document.getElementById('meas-edit-last-cal').value,
+    nextCal: document.getElementById('meas-edit-next-cal').value,
+    updatedAt: now()
+  };
+  const stored = await dbGetAll('meas_edits');
+  const existing = stored.find(e => e.sn === sn);
+  if (existing) { edit.id = existing.id; await dbPut('meas_edits', edit); }
+  else { await dbAdd('meas_edits', edit); }
+  showNotif('Збережено');
+  closeModal('modal-meas-edit');
+  renderMeasuring();
+}
+
+async function exportMeasuringCSV() {
   const rows = [['№','Найменування','Тип/PN','SN','Діапазон','Місце','Остання повірка','Наступна повірка','Статус']];
   PRELOADED_MEASURING.forEach(m => rows.push([m.num,m.name,m.pn,m.sn,m.range,m.location,m.lastCal,m.nextCal,m.status]));
   const csv = rows.map(r => r.map(v => `"${v||''}"`).join(',')).join('\n');
