@@ -1723,7 +1723,7 @@ const KITS = {
 // ===================== IndexedDB =====================
 let db;
 const DB_NAME = 'avronis_v2';
-const DB_VER = 3;
+const DB_VER = 2;
 
 function initDB() {
   return new Promise((res, rej) => {
@@ -1735,19 +1735,18 @@ function initDB() {
     }
     req.onupgradeneeded = e => {
       const d = e.target.result;
-      // Видаляємо старі сховища якщо є конфлікт
-      const stores = ['inventory','requests','journal','acts','tools_edits','meas_edits'];
-      stores.forEach(name => {
-        if (d.objectStoreNames.contains(name)) d.deleteObjectStore(name);
+      // Тільки створюємо нові сховища — НІКОЛИ не видаляємо існуючі
+      const toCreate = {
+        'inventory': () => { const s = d.createObjectStore('inventory',{keyPath:'id',autoIncrement:true}); s.createIndex('pn','pn',{unique:false}); },
+        'requests': () => d.createObjectStore('requests',{keyPath:'id',autoIncrement:true}),
+        'journal': () => d.createObjectStore('journal',{keyPath:'id',autoIncrement:true}),
+        'acts': () => d.createObjectStore('acts',{keyPath:'id',autoIncrement:true}),
+        'tools_edits': () => d.createObjectStore('tools_edits',{keyPath:'id',autoIncrement:true}),
+        'meas_edits': () => d.createObjectStore('meas_edits',{keyPath:'id',autoIncrement:true}),
+      };
+      Object.entries(toCreate).forEach(([name, create]) => {
+        if (!d.objectStoreNames.contains(name)) create();
       });
-      const s = d.createObjectStore('inventory', {keyPath:'id', autoIncrement:true});
-      s.createIndex('pn','pn',{unique:false});
-      d.createObjectStore('requests',{keyPath:'id',autoIncrement:true});
-      d.createObjectStore('journal',{keyPath:'id',autoIncrement:true});
-      d.createObjectStore('acts',{keyPath:'id',autoIncrement:true});
-      d.createObjectStore('tools_edits',{keyPath:'id',autoIncrement:true});
-      if (!d.objectStoreNames.contains('meas_edits'))
-        d.createObjectStore('meas_edits',{keyPath:'id',autoIncrement:true});
     };
     req.onsuccess = e => { db = e.target.result; res(db); };
     req.onerror = e => rej(e.target.error || e);
