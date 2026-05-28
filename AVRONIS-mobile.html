@@ -547,10 +547,16 @@ function toggleWh(p, cb) {
 function setWhQty(p, v) { whSel[p] = parseFloat(v) || 1; }
 function whNext() {
   items = [];
-  Object.entries(whSel).forEach(([p, q]) => {
-    if (!q) return;
-    const x = WH.find(i => (i.p || i.n) === p);
-    if (x) items.push({ name: x.n, pn: x.p !== x.n ? x.p : '', qty: q, unit: x.unit || 'шт' });
+  const selected = Object.entries(whSel).filter(([p, q]) => q > 0);
+  if (!selected.length) { alert('Оберіть хоча б одну позицію'); return; }
+  selected.forEach(([p, q]) => {
+    const x = WH.find(i => (i.p || i.n) === p) || WH.find(i => i.n === p) || WH.find(i => i.p === p);
+    if (x) {
+      items.push({ name: x.n, pn: x.p !== x.n ? x.p : '', qty: q, unit: x.unit || 'шт' });
+    } else {
+      // Якщо не знайшли в WH — додаємо з ключа напряму
+      items.push({ name: p, pn: '', qty: q, unit: 'шт' });
+    }
   });
   if (!items.length) { alert('Оберіть хоча б одну позицію'); return; }
   showReview();
