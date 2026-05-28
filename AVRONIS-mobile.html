@@ -497,66 +497,52 @@ function manNext() {
 }
 
 function renderWh(q) {
-  const filtered = WH.filter(x => !q ||
-    (x.n || '').toLowerCase().includes(q.toLowerCase()) ||
-    (x.p || '').toLowerCase().includes(q.toLowerCase())
-  );
-  if (!filtered.length && !whLoaded) {
+  if (!whLoaded) {
     document.getElementById('whl').innerHTML = '<div class="loading">⏳ Завантаження...</div>';
     return;
   }
-  if (!filtered.length) {
+  if (!WH.length) {
     document.getElementById('whl').innerHTML = '<div class="loading">Нічого не знайдено</div>';
     return;
   }
-  // Рендеримо всі позиції одразу — фільтрація через show/hide
-  document.getElementById('whl').innerHTML = WH.map(x => {
+  document.getElementById('whl').innerHTML = WH.map((x, idx) => {
     const key = x.p || x.n;
     const hidden = q && !(x.n||'').toLowerCase().includes(q.toLowerCase()) && !(x.p||'').toLowerCase().includes(q.toLowerCase());
-    return `<div class="wh-item" data-key="${key.replace(/"/g,'&quot;')}" style="${hidden ? 'display:none' : ''}">
-      <input type="checkbox" class="wh-cb" ${whSel[key] ? 'checked' : ''} onchange="toggleWh('${key.replace(/'/g,"\\'")}', this)">
+    return `<div class="wh-item" style="${hidden ? 'display:none' : ''}">
+      <input type="checkbox" class="wh-cb" data-idx="${idx}" ${whSel[idx] ? 'checked' : ''} onchange="toggleWh(${idx}, this)">
       <div class="wh-name">
         <div>${x.n}</div>
         ${x.p && x.p !== x.n ? '<div class="wh-pn">' + x.p + '</div>' : ''}
         <div style="font-size:11px;color:#4a7a9b">На складі: ${x.qty} ${x.unit}</div>
       </div>
-      <input type="number" class="wh-qty" value="${whSel[key] || 1}" min="1" onchange="setWhQty('${key.replace(/'/g,"\\'")}', this.value)">
+      <input type="number" class="wh-qty" data-idx="${idx}" value="${whSel[idx]?.qty || 1}" min="1" onchange="setWhQty(${idx}, this.value)">
     </div>`;
   }).join('');
 }
 function filterWh() {
   const q = (document.getElementById('whs').value || '').toLowerCase();
-  // Якщо список ще не завантажений — завантажуємо
-  if (!whLoaded) { renderWh(q); return; }
-  // Просто показуємо/ховаємо рядки без перемальовування
-  document.querySelectorAll('#whl .wh-item').forEach(el => {
-    const key = el.dataset.key || '';
-    const x = WH.find(i => (i.p || i.n) === key);
+  if (!whLoaded) { loadWarehouse(); return; }
+  document.querySelectorAll('#whl .wh-item').forEach((el, i) => {
+    const x = WH[i];
     if (!x) return;
     const match = !q || (x.n||'').toLowerCase().includes(q) || (x.p||'').toLowerCase().includes(q);
     el.style.display = match ? '' : 'none';
   });
 }
-function toggleWh(p, cb) {
-  if (cb) {
-    whSel[p] = cb.checked ? (whSel[p] || 1) : 0;
-  } else {
-    whSel[p] = whSel[p] ? 0 : 1;
-  }
+function toggleWh(idx, cb) {
+  if (!whSel[idx]) whSel[idx] = { qty: 1 };
+  whSel[idx].checked = cb ? cb.checked : !whSel[idx].checked;
 }
-function setWhQty(p, v) { whSel[p] = parseFloat(v) || 1; }
+function setWhQty(idx, v) {
+  if (!whSel[idx]) whSel[idx] = { checked: true };
+  whSel[idx].qty = parseFloat(v) || 1;
+}
 function whNext() {
   items = [];
-  const selected = Object.entries(whSel).filter(([p, q]) => q > 0);
-  if (!selected.length) { alert('Оберіть хоча б одну позицію'); return; }
-  selected.forEach(([p, q]) => {
-    const x = WH.find(i => (i.p || i.n) === p) || WH.find(i => i.n === p) || WH.find(i => i.p === p);
-    if (x) {
-      items.push({ name: x.n, pn: x.p !== x.n ? x.p : '', qty: q, unit: x.unit || 'шт' });
-    } else {
-      // Якщо не знайшли в WH — додаємо з ключа напряму
-      items.push({ name: p, pn: '', qty: q, unit: 'шт' });
-    }
+  Object.entries(whSel).forEach(([idx, sel]) => {
+    if (!sel || !sel.checked) return;
+    const x = WH[parseInt(idx)];
+    if (x) items.push({ name: x.n, pn: x.p !== x.n ? x.p : '', qty: sel.qty || 1, unit: x.unit || 'шт' });
   });
   if (!items.length) { alert('Оберіть хоча б одну позицію'); return; }
   showReview();
@@ -605,7 +591,7 @@ async function submitReq() {
 }
 
 function reset() {
-  mode = ''; items = []; user = {}; whSel = {};
+  mode = ''; items = []; user = {}; whSel = {}; whLoaded = false; WH = [];
   ['exec','agg','proj','wp'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   const area = document.getElementById('area'); if (area) area.value = '';
   document.getElementById('mrows').innerHTML = '<div class="item-row"><input type="text" placeholder="Найменування" class="name"><input type="number" placeholder="К-сть" class="qty" value="1" min="1"><button class="del" onclick="delRow(this)">✕</button></div>';
