@@ -724,6 +724,9 @@ select option { background: var(--surface2); }
           <button class="btn btn-primary" onclick="syncActsToInventory().then(()=>{renderBackupStats();loadDashboard();})">🔄 Синхронізувати акти → склад</button>
           <button class="btn btn-warn" onclick="reloadActsFromPreloaded()">♻️ Перезавантажити реєстр актів</button>
           <button class="btn btn-ghost" onclick="fixJournalPns()" title="Виправити pn в старих записах журналу щоб збіглись зі складом">🔧 Виправити pn в журналі</button>
+          <button class="btn btn-success" onclick="autoBackupToSheets().then(()=>showNotif('✅ Бекап збережено в Google Sheets'))">☁️ Зберегти бекап в Sheets</button>
+          <button class="btn btn-ghost" onclick="restoreFromSheets()" style="border-color:var(--orange);color:var(--orange)">⬇️ Відновити з Sheets</button>
+          <div id="backup-status" style="font-size:12px;color:var(--text2);margin-top:8px"></div>
         </div>
         <div class="card" style="background:var(--surface2)">
           <div style="font-size:12px;color:var(--text2)">
@@ -4017,6 +4020,9 @@ async function startApp() {
   if (window.location.hash !== '#mobile-request' && new URLSearchParams(window.location.search).get('mode') !== 'mobile') {
     await preloadDataIfEmpty();
     loadDashboard();
+    // Автобекап: через 15 сек після старту і кожні 5 хвилин
+    setTimeout(() => autoBackupToSheets(), 15000);
+    setInterval(() => autoBackupToSheets(), 5 * 60 * 1000);
     setInterval(async () => {
       try {
         const resp = await fetch(GAS_URL+'?action=getRequests',{method:'GET',redirect:'follow'});
@@ -4112,6 +4118,72 @@ async function fixJournalPns() {
   }
 }
 
+// ── АВТОБЕКАП В GOOGLE SHEETS ──────────────────────────────────────────────
+async function autoBackupToSheets() {
+  try {
+    const inv = await dbGetAll('inventory');
+    const journal = await dbGetAll('journal');
+    const acts = await dbGetAll('acts');
+    if (!inv.length && !acts.length) return; // порожня база — не зберігаємо
+
+    const payload = {
+      action: 'saveBackup',
+      inventory: inv,
+      journal,
+      acts,
+      exportedAt: now()
+    };
+
+    await fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+
+    localStorage.setItem('lastBackup', now());
+    const el = document.getElementById('backup-status');
+    if (el) el.textContent = '✅ Бекап: ' + new Date().toLocaleTimeString('uk-UA');
+  } catch(e) {
+    console.warn('Автобекап не вдався:', e.message);
+  }
+}
+
+async function restoreFromSheets() {
+  try {
+    showNotif('⏳ Завантаження бекапу з Google Sheets...');
+    const resp = await fetch(GAS_URL + '?action=getBackup');
+    const data = await resp.json();
+
+    if (data.inventory && data.inventory.length > 0) {
+      const tx1 = db.transaction('inventory','readwrite');
+      const s1 = tx1.objectStore('inventory');
+      s1.clear();
+      data.inventory.forEach(item => { delete item.id; s1.add(item); });
+      await new Promise(r=>tx1.oncomplete=r);
+    }
+    if (data.journal && data.journal.length > 0) {
+      const tx2 = db.transaction('journal','readwrite');
+      const s2 = tx2.objectStore('journal');
+      s2.clear();
+      data.journal.forEach(item => { delete item.id; s2.add(item); });
+      await new Promise(r=>tx2.oncomplete=r);
+    }
+    if (data.acts && data.acts.length > 0) {
+      const tx3 = db.transaction('acts','readwrite');
+      const s3 = tx3.objectStore('acts');
+      s3.clear();
+      data.acts.forEach(item => { delete item.id; s3.add(item); });
+      await new Promise(r=>tx3.oncomplete=r);
+    }
+
+    showNotif(`✅ Відновлено: ${data.inventory?.length||0} склад, ${data.journal?.length||0} журнал, ${data.acts?.length||0} актів`);
+    setTimeout(()=>location.reload(), 1500);
+  } catch(e) {
+    showNotif('❌ Помилка відновлення: ' + e.message, 'err');
+  }
+}
+
 async function syncActsToInventory() {
   const dbActs = await dbGetAll('acts');
   const acts = dbActs.length > 0 ? dbActs : PRELOADED_ACTS;
@@ -4119,40 +4191,26 @@ async function syncActsToInventory() {
 
   // Читаємо поточний склад
   const existingInv = await dbGetAll('inventory');
-
-  // Індекс існуючих actNum на складі
   const existingActNums = new Set(existingInv.map(i => i.actNum).filter(Boolean));
 
-  // Додаємо ТІЛЬКИ ті акти яких ще немає на складі — нічого не видаляємо
+  // Додаємо ТІЛЬКИ ті акти яких ще немає на складі
   let added = 0;
   for (const a of goodActs) {
-    if (existingActNums.has(a.actNum)) continue; // вже є — пропускаємо
-
+    if (existingActNums.has(a.actNum)) continue;
     const qtyStr = String(a.qty||'1').replace(/[^\d.,]/g,'');
     const qty = parseFloat(qtyStr.replace(',','.')) || 1;
     const unit = a.unit || (String(a.qty||'').includes('м') ? 'м' :
                  String(a.qty||'').includes('к-т') ? 'к-т' : 'шт');
-
     await dbAdd('inventory', {
-      name: a.name,
-      pn: a.pn || '',
-      sn: a.sn || '',
-      category: a.category,
-      qty,
-      minQty: 0,
-      unit,
-      location: '',
-      notes: `Акт ${a.actNum}`,
-      createdAt: a.date || now(),
-      source: 'act',
-      actNum: a.actNum,
-      supplier: a.supplier || '',
-      actDate: a.date || ''
+      name: a.name, pn: a.pn||'', sn: a.sn||'', category: a.category,
+      qty, minQty: 0, unit, location: '',
+      notes: `Акт ${a.actNum}`, createdAt: a.date||now(),
+      source: 'act', actNum: a.actNum, supplier: a.supplier||'', actDate: a.date||''
     });
     added++;
   }
 
-  const total = existingInv.length + added;
+  const total = (await dbGetAll('inventory')).length;
   showNotif(`✅ Додано ${added} нових позицій. Всього на складі: ${total}`);
   renderInventory();
   loadDashboard();
