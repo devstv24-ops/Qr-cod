@@ -648,7 +648,7 @@ select option { background: var(--surface2); }
             <option value="">Всі типи</option><option>Стандартний</option><option>Спеціальний</option>
           </select>
           <select id="tools-filter-loc" onchange="renderTools()" style="width:auto;min-width:200px">
-            <option value="">Всі місця</option>
+            <option value="">Всі ділянки</option>
             <option>Warehouse and incoming inspection area</option>
             <option>Component Assembly Area</option>
             <option>Component Cleaning Area</option>
@@ -658,6 +658,9 @@ select option { background: var(--surface2); }
             <option>General-purpose tools</option>
             <option>Packing and Finished Goods Storage Area</option>
           </select>
+          <select id="tools-filter-storage" onchange="renderTools()" style="width:auto;min-width:160px">
+            <option value="">Всі місця зберігання</option>
+          </select>
         </div>
         <div style="font-size:12px;color:var(--text2);margin-bottom:10px" id="tools-count"></div>
         <div class="tbl-wrap">
@@ -665,7 +668,7 @@ select option { background: var(--surface2); }
             <thead><tr>
               <th>№</th><th>Найменування</th><th>PN / Кресл.№</th>
               <th>Тип</th><th>Акт ВК</th><th>Маркування</th>
-              <th>Місце зберігання</th><th>Відповідальний</th><th>Дії</th>
+              <th>Ділянка зберігання</th><th>Місце зберігання</th><th>Відповідальний</th><th>Дії</th>
             </tr></thead>
             <tbody id="tools-tbody"></tbody>
           </table>
@@ -1246,7 +1249,7 @@ select option { background: var(--surface2); }
       </div>
       <div class="form-row">
         <div class="form-group full">
-          <label>Місце зберігання</label>
+          <label>Ділянка зберігання</label>
           <select id="tool-edit-location">
             <option>General-purpose tools</option>
             <option>Warehouse and incoming inspection area</option>
@@ -1257,6 +1260,12 @@ select option { background: var(--surface2); }
             <option>Mechanical Disassembly and Repair Area</option>
             <option>Packing and Finished Goods Storage Area</option>
           </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group full">
+          <label>Місце зберігання (шухляда, полиця, відсік...)</label>
+          <input type="text" id="tool-edit-storage-place" placeholder="напр. Drawer No. 1">
         </div>
       </div>
       <div class="form-row">
@@ -3728,15 +3737,33 @@ async function getToolsData() {
 }
 
 function renderTools() {
-  toolsData = null; // скидаємо кеш щоразу при відкритті вкладки
+  toolsData = null;
   getToolsData().then(tools => {
     const search = (document.getElementById('tools-search')?.value || '').toLowerCase();
     const typeF = document.getElementById('tools-filter-type')?.value || '';
     const locF = document.getElementById('tools-filter-loc')?.value || '';
+    const storageF = document.getElementById('tools-filter-storage')?.value || '';
+
+    // Динамічно заповнюємо фільтр місць зберігання
+    const storageSel = document.getElementById('tools-filter-storage');
+    if (storageSel) {
+      const places = [...new Set(tools.map(t => t.storagePlace).filter(Boolean))].sort();
+      const curVal = storageSel.value;
+      storageSel.innerHTML = '<option value="">Всі місця зберігання</option>' +
+        places.map(p => `<option ${p === curVal ? 'selected' : ''}>${p}</option>`).join('');
+    }
+
     let filtered = tools;
-    if (search) filtered = filtered.filter(t => (t.name||'').toLowerCase().includes(search) || (t.marking||'').toLowerCase().includes(search) || (t.pn||'').toLowerCase().includes(search));
+    if (search) filtered = filtered.filter(t =>
+      (t.name||'').toLowerCase().includes(search) ||
+      (t.marking||'').toLowerCase().includes(search) ||
+      (t.pn||'').toLowerCase().includes(search) ||
+      (t.storagePlace||'').toLowerCase().includes(search)
+    );
     if (typeF) filtered = filtered.filter(t => t.type === typeF);
     if (locF) filtered = filtered.filter(t => t.location === locF);
+    if (storageF) filtered = filtered.filter(t => t.storagePlace === storageF);
+
     const cnt = document.getElementById('tools-count');
     if (cnt) {
       const wh = tools.filter(t => t.location === 'Warehouse and incoming inspection area').length;
@@ -3745,7 +3772,7 @@ function renderTools() {
     const tbody = document.getElementById('tools-tbody');
     if (!tbody) return;
     if (!filtered.length) {
-      tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">🔧</div><div class="empty-title">Нічого не знайдено</div></div></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">🔧</div><div class="empty-title">Нічого не знайдено</div></div></td></tr>';
       return;
     }
     tbody.innerHTML = filtered.map(t => {
@@ -3758,6 +3785,7 @@ function renderTools() {
         <td class="td-mono">${t.actNum||'—'}</td>
         <td class="td-mono" style="color:var(--accent)">${t.marking||'—'}</td>
         <td style="font-size:12px">${t.location||'—'}</td>
+        <td style="font-size:12px;color:var(--text2)">${t.storagePlace||'—'}</td>
         <td style="font-size:12px">${t.responsible||'—'}</td>
         <td><button class="btn btn-ghost btn-icon btn-sm" onclick="openToolEdit('${(t.marking||'').replace(/'/g,'')}')" title="Редагувати">✏️</button></td>
       </tr>`;
@@ -3773,6 +3801,7 @@ async function openToolEdit(marking) {
   document.getElementById('tool-edit-pn').value = t.pn || '';
   document.getElementById('tool-edit-marking').value = t.marking || '';
   document.getElementById('tool-edit-location').value = t.location || 'General-purpose tools';
+  document.getElementById('tool-edit-storage-place').value = t.storagePlace || '';
   document.getElementById('tool-edit-responsible').value = t.responsible || '';
   openModal('modal-tool-edit');
 }
@@ -3784,6 +3813,7 @@ async function saveToolEdit() {
     name: document.getElementById('tool-edit-name').value.trim(),
     pn: document.getElementById('tool-edit-pn').value.trim(),
     location: document.getElementById('tool-edit-location').value,
+    storagePlace: document.getElementById('tool-edit-storage-place').value.trim(),
     responsible: document.getElementById('tool-edit-responsible').value.trim(),
     updatedAt: now()
   };
