@@ -509,9 +509,11 @@ function renderWh(q) {
     document.getElementById('whl').innerHTML = '<div class="loading">Нічого не знайдено</div>';
     return;
   }
-  document.getElementById('whl').innerHTML = filtered.map(x => {
+  // Рендеримо всі позиції одразу — фільтрація через show/hide
+  document.getElementById('whl').innerHTML = WH.map(x => {
     const key = x.p || x.n;
-    return `<div class="wh-item">
+    const hidden = q && !(x.n||'').toLowerCase().includes(q.toLowerCase()) && !(x.p||'').toLowerCase().includes(q.toLowerCase());
+    return `<div class="wh-item" data-key="${key.replace(/"/g,'&quot;')}" style="${hidden ? 'display:none' : ''}">
       <input type="checkbox" class="wh-cb" ${whSel[key] ? 'checked' : ''} onchange="toggleWh('${key.replace(/'/g,"\\'")}', this)">
       <div class="wh-name">
         <div>${x.n}</div>
@@ -522,7 +524,19 @@ function renderWh(q) {
     </div>`;
   }).join('');
 }
-function filterWh() { renderWh(document.getElementById('whs').value); }
+function filterWh() {
+  const q = (document.getElementById('whs').value || '').toLowerCase();
+  // Якщо список ще не завантажений — завантажуємо
+  if (!whLoaded) { renderWh(q); return; }
+  // Просто показуємо/ховаємо рядки без перемальовування
+  document.querySelectorAll('#whl .wh-item').forEach(el => {
+    const key = el.dataset.key || '';
+    const x = WH.find(i => (i.p || i.n) === key);
+    if (!x) return;
+    const match = !q || (x.n||'').toLowerCase().includes(q) || (x.p||'').toLowerCase().includes(q);
+    el.style.display = match ? '' : 'none';
+  });
+}
 function toggleWh(p, cb) {
   if (cb) {
     whSel[p] = cb.checked ? (whSel[p] || 1) : 0;
