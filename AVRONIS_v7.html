@@ -2448,15 +2448,23 @@ async function openConfirmIssue(reqId) {
     // Якщо не знайдено — показуємо весь склад для ручного вибору
     const matchingInv = aggInv.filter(i => normPn(i.pn) === pnNorm && pnNorm);
     const sortedInv = matchingInv.length > 0
-      ? matchingInv.sort((a,b) => (b.qty > 0 ? 1 : 0) - (a.qty > 0 ? 1 : 0))
-      : aggInv; // якщо pn не знайдено — показуємо весь склад
+      ? [...matchingInv].sort((a,b) => (b.qty > 0 ? 1 : 0) - (a.qty > 0 ? 1 : 0))
+      : aggInv;
+
+    // Загальна кількість по всіх партіях цього pn
+    const totalOnStock = matchingInv.reduce((sum, i) => sum + (parseFloat(i.qty)||0), 0);
+    const matchStockUnit = exactMatch ? (exactMatch.unit||'шт') : reqUnit;
+    const enoughStock = totalOnStock >= reqInStockUnit;
+    const stockBadge = matchingInv.length > 0
+      ? `<span class="badge ${enoughStock ? 'badge-ok' : 'badge-danger'}">${totalOnStock} ${matchStockUnit}</span>${matchingInv.length > 1 ? `<div style="font-size:10px;color:var(--text2)">${matchingInv.length} партій</div>` : ''}${convHint}`
+      : '<span class="badge badge-grey" style="font-size:11px">Не знайдено</span>';
 
     const selectedId = exactMatch ? exactMatch.id : '';
 
     return `<tr>
       <td style="text-align:center">
         <input type="checkbox" class="issue-cb" data-idx="${idx}"
-          ${onStock !== null ? 'checked' : ''}
+          ${matchingInv.length > 0 ? 'checked' : ''}
           onchange="toggleIssueRow(this)" style="width:16px;height:16px;accent-color:var(--accent)">
       </td>
       <td class="td-mono" style="font-size:11px">${it.pn||'—'}</td>
@@ -2465,13 +2473,14 @@ async function openConfirmIssue(reqId) {
         <input type="number" class="issue-qty-input" data-idx="${idx}"
           value="${it.qty}" min="0.001" step="0.001"
           style="width:65px;padding:3px 6px;font-size:12px;text-align:center;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text)"
-          ${onStock === null ? 'disabled' : ''}>
+          ${matchingInv.length === 0 ? 'disabled' : ''}>
         ${reqUnit}
       </td>
       <td style="min-width:280px">
         <input type="text" placeholder="🔍 фільтр по акту або постачальнику..." oninput="filterInvSelect(this, ${idx})"
           style="width:100%;margin-bottom:4px;padding:4px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);outline:none;font-family:inherit">
         <select class="issue-inv-select" data-idx="${idx}"
+          onchange="onInvSelectChange(this, ${idx})"
           style="width:100%;padding:5px 6px;font-size:12px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text)">
           <option value="">— не списувати —</option>
           ${sortedInv.map(i => {
@@ -2484,13 +2493,30 @@ async function openConfirmIssue(reqId) {
             return `<option value="${val}" ${isSelected ? 'selected' : ''}>${label}</option>`;
           }).join('')}
         </select>
-        <div style="margin-top:3px">${statusBadge}</div>
+        <div style="margin-top:3px">${stockBadge}</div>
       </td>
     </tr>`;
   }).join('');
 
   document.getElementById('storekeeper-name').value = '';
   openModal('modal-confirm-issue');
+}
+
+function onInvSelectChange(sel, idx) {
+  const row = sel.closest('tr');
+  const cb = row.querySelector('.issue-cb');
+  const qtyInput = row.querySelector('.issue-qty-input');
+  if (!sel.value) {
+    // "не списувати" — знімаємо галочку
+    if (cb) cb.checked = false;
+    if (qtyInput) qtyInput.disabled = true;
+    row.style.opacity = '0.4';
+  } else {
+    // Вибрана конкретна партія — відмічаємо
+    if (cb) cb.checked = true;
+    if (qtyInput) qtyInput.disabled = false;
+    row.style.opacity = '1';
+  }
 }
 
 function toggleIssueRow(cb) {
