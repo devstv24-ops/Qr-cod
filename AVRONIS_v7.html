@@ -4150,13 +4150,14 @@ async function autoBackupToSheets() {
     const inv = await dbGetAll('inventory');
     const journal = await dbGetAll('journal');
     const acts = await dbGetAll('acts');
-    if (!inv.length && !acts.length) return; // порожня база — не зберігаємо
+    const requests = await dbGetAll('requests');
+    const tools_edits = await dbGetAll('tools_edits');
+    const meas_edits = await dbGetAll('meas_edits');
+    if (!inv.length && !acts.length) return;
 
     const payload = {
       action: 'saveBackup',
-      inventory: inv,
-      journal,
-      acts,
+      inventory: inv, journal, acts, requests, tools_edits, meas_edits,
       exportedAt: now()
     };
 
@@ -4181,29 +4182,26 @@ async function restoreFromSheets() {
     const resp = await fetch(GAS_URL + '?action=getBackup');
     const data = await resp.json();
 
-    if (data.inventory && data.inventory.length > 0) {
-      const tx1 = db.transaction('inventory','readwrite');
-      const s1 = tx1.objectStore('inventory');
-      s1.clear();
-      data.inventory.forEach(item => { delete item.id; s1.add(item); });
-      await new Promise(r=>tx1.oncomplete=r);
-    }
-    if (data.journal && data.journal.length > 0) {
-      const tx2 = db.transaction('journal','readwrite');
-      const s2 = tx2.objectStore('journal');
-      s2.clear();
-      data.journal.forEach(item => { delete item.id; s2.add(item); });
-      await new Promise(r=>tx2.oncomplete=r);
-    }
-    if (data.acts && data.acts.length > 0) {
-      const tx3 = db.transaction('acts','readwrite');
-      const s3 = tx3.objectStore('acts');
-      s3.clear();
-      data.acts.forEach(item => { delete item.id; s3.add(item); });
-      await new Promise(r=>tx3.oncomplete=r);
-    }
+    const restoreStore = async (storeName, items) => {
+      if (!items?.length) return 0;
+      const tx = db.transaction(storeName,'readwrite');
+      const s = tx.objectStore(storeName);
+      s.clear();
+      items.forEach(item => { const c={...item}; delete c.id; s.add(c); });
+      await new Promise(r=>tx.oncomplete=r);
+      return items.length;
+    };
 
-    showNotif(`✅ Відновлено: ${data.inventory?.length||0} склад, ${data.journal?.length||0} журнал, ${data.acts?.length||0} актів`);
+    const counts = {
+      inventory: await restoreStore('inventory', data.inventory),
+      journal:   await restoreStore('journal',   data.journal),
+      acts:      await restoreStore('acts',       data.acts),
+      requests:  await restoreStore('requests',   data.requests),
+      tools:     await restoreStore('tools_edits', data.tools_edits),
+      meas:      await restoreStore('meas_edits',  data.meas_edits),
+    };
+
+    showNotif(`✅ Відновлено: склад ${counts.inventory}, журнал ${counts.journal}, акти ${counts.acts}, заявки ${counts.requests}, інструмент ${counts.tools}`);
     setTimeout(()=>location.reload(), 1500);
   } catch(e) {
     showNotif('❌ Помилка відновлення: ' + e.message, 'err');
