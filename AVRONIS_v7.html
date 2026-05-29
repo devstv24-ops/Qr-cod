@@ -1757,6 +1757,14 @@ function initDB() {
   });
 }
 
+// Stores які потребують автобекапу після кожного запису
+const BACKUP_STORES = new Set(['inventory','journal','acts','requests','tools_edits','meas_edits']);
+let _backupTimer = null;
+function scheduleBackup() {
+  if (_backupTimer) clearTimeout(_backupTimer);
+  _backupTimer = setTimeout(() => { autoBackupToSheets(); _backupTimer = null; }, 3000);
+}
+
 function dbGetAll(store) {
   return new Promise((res,rej)=>{
     const tx = db.transaction(store,'readonly');
@@ -1777,7 +1785,7 @@ function dbAdd(store,obj) {
   return new Promise((res,rej)=>{
     const tx = db.transaction(store,'readwrite');
     const req = tx.objectStore(store).add(obj);
-    req.onsuccess = ()=>res(req.result);
+    req.onsuccess = ()=>{ if(BACKUP_STORES.has(store)) scheduleBackup(); res(req.result); };
     req.onerror = ()=>rej(req.error);
   });
 }
@@ -1785,7 +1793,7 @@ function dbPut(store,obj) {
   return new Promise((res,rej)=>{
     const tx = db.transaction(store,'readwrite');
     const req = tx.objectStore(store).put(obj);
-    req.onsuccess = ()=>res(req.result);
+    req.onsuccess = ()=>{ if(BACKUP_STORES.has(store)) scheduleBackup(); res(req.result); };
     req.onerror = ()=>rej(req.error);
   });
 }
@@ -1793,7 +1801,7 @@ function dbDelete(store,id) {
   return new Promise((res,rej)=>{
     const tx = db.transaction(store,'readwrite');
     const req = tx.objectStore(store).delete(id);
-    req.onsuccess = ()=>res();
+    req.onsuccess = ()=>{ if(BACKUP_STORES.has(store)) scheduleBackup(); res(); };
     req.onerror = ()=>rej(req.error);
   });
 }
