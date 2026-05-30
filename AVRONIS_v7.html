@@ -724,7 +724,7 @@ select option { background: var(--surface2); }
           <button class="btn btn-primary" onclick="syncActsToInventory().then(()=>{renderBackupStats();loadDashboard();})">🔄 Синхронізувати акти → склад</button>
           <button class="btn btn-warn" onclick="reloadActsFromPreloaded()">♻️ Перезавантажити реєстр актів</button>
           <button class="btn btn-ghost" onclick="fixJournalPns()" title="Виправити pn в старих записах журналу щоб збіглись зі складом">🔧 Виправити pn в журналі</button>
-          <button class="btn btn-warn" onclick="addMissingActsToInventory()" title="Додати на склад партії з актів яких ще немає">➕ Додати відсутні партії зі актів</button>
+          <button class="btn btn-warn" onclick="addMissingActsToInventory()">➕ Додати відсутні партії зі актів</button>
           <button class="btn btn-success" onclick="autoBackupToSheets().then(()=>showNotif('✅ Бекап збережено в Google Sheets'))">☁️ Зберегти бекап в Sheets</button>
           <button class="btn btn-ghost" onclick="restoreFromSheets()" style="border-color:var(--orange);color:var(--orange)">⬇️ Відновити з Sheets</button>
           <div id="backup-status" style="font-size:12px;color:var(--text2);margin-top:8px"></div>
@@ -2453,22 +2453,29 @@ async function openConfirmIssue(reqId) {
       ? '<span class="badge badge-grey" style="font-size:11px">Не знайдено</span>'
       : `<span class="badge ${enough ? 'badge-ok' : 'badge-danger'}">${onStock} ${stockUnit}</span>${convHint}`;
 
-    // Dropdown: показуємо тільки партії з тим самим pn (різні акти/постачальники)
-    // Якщо не знайдено — показуємо весь склад для ручного вибору
-    const matchingInv = aggInv.filter(i => normPn(i.pn) === pnNorm && pnNorm);
+    // Dropdown: всі партії що збігаються по pn (або по назві якщо pn порожній)
+    let matchingInv = [];
+    if (pnNorm) {
+      matchingInv = aggInv.filter(i => normPn(i.pn) === pnNorm);
+    }
+    if (!matchingInv.length && nameNorm) {
+      matchingInv = aggInv.filter(i => (i.name||'').toLowerCase().trim() === nameNorm);
+    }
     const sortedInv = matchingInv.length > 0
       ? [...matchingInv].sort((a,b) => (b.qty > 0 ? 1 : 0) - (a.qty > 0 ? 1 : 0))
       : aggInv;
 
     // Загальна кількість по всіх партіях цього pn
     const totalOnStock = matchingInv.reduce((sum, i) => sum + (parseFloat(i.qty)||0), 0);
-    const matchStockUnit = exactMatch ? (exactMatch.unit||'шт') : reqUnit;
+    const matchStockUnit = (matchingInv[0] || exactMatch) ? ((matchingInv[0] || exactMatch).unit||'шт') : reqUnit;
     const enoughStock = totalOnStock >= reqInStockUnit;
     const stockBadge = matchingInv.length > 0
       ? `<span class="badge ${enoughStock ? 'badge-ok' : 'badge-danger'}">${totalOnStock} ${matchStockUnit}</span>${matchingInv.length > 1 ? `<div style="font-size:10px;color:var(--text2)">${matchingInv.length} партій</div>` : ''}${convHint}`
       : '<span class="badge badge-grey" style="font-size:11px">Не знайдено</span>';
 
-    const selectedId = exactMatch ? exactMatch.id : '';
+    // Вибираємо партію з найбільшою кількістю як default
+    const bestMatch = sortedInv.find(i => i.qty > 0) || sortedInv[0] || null;
+    const selectedId = bestMatch ? bestMatch.id : '';
 
     return `<tr>
       <td style="text-align:center">
@@ -2498,7 +2505,7 @@ async function openConfirmIssue(reqId) {
             const qtyTag = `${i.qty} ${i.unit||'шт'}`;
             const label = `${i.pn||'—'}${actTag}${supplierTag} · ${i.name} (${qtyTag})`;
             const val = encodeURIComponent([i.pn||'', i.name||'', i.unit||'шт', i.actNum||'', i.supplier||''].join('|||'));
-            const isSelected = exactMatch && i.id === exactMatch.id;
+            const isSelected = bestMatch && i.id === bestMatch.id;
             return `<option value="${val}" ${isSelected ? 'selected' : ''}>${label}</option>`;
           }).join('')}
         </select>
@@ -2813,10 +2820,10 @@ async function renderJournal(searchVal) {
   const search = (searchVal !== undefined ? searchVal : (document.getElementById('journal-search')?.value || '')).toLowerCase();
   entries.sort((a,b) => new Date(b.date) - new Date(a.date));
 
-  // Групуємо по reqNum (якщо reqNum порожній — кожен запис окремо)
+  // Групуємо по reqNum
   const groups = new Map();
   for (const e of entries) {
-    const key = (e.reqNum && e.reqNum.trim()) ? e.reqNum.trim() : ('__solo__' + e.id);
+    const key = e.reqNum || ('—' + e.date?.slice(0,10));
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(e);
   }
@@ -2830,7 +2837,7 @@ async function renderJournal(searchVal) {
   let html = '';
   for (const [groupKey, rows] of groups) {
     const first = rows[0];
-    const displayReqNum = groupKey.startsWith('__solo__') ? `(${fmtDate(first.date).split(' ')[0]})` : groupKey;
+    const displayReqNum = (groupKey.startsWith('__solo__')) ? ('—') : groupKey;
     // Фільтрація пошуком — з нормалізацією pn
     const searchNorm = normPn(search);
     const matchSearch = !search ||
@@ -2851,7 +2858,6 @@ async function renderJournal(searchVal) {
     const someReturned = rows.some(r => r.returned);
     const hasUnreturned = rows.some(r => !r.returned);
     const unreturnedIds = rows.filter(r => !r.returned).map(r => r.id);
-    const escapedKey = groupKey.replace(/'/g, "\'");
 
     html += `<div style="border:1px solid var(--border);border-radius:8px;margin-bottom:12px;overflow:hidden">
       <div style="background:var(--surface2);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -2865,7 +2871,7 @@ async function renderJournal(searchVal) {
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           ${allReturned ? '<span class="badge badge-ok" style="font-size:11px">↩ Повністю повернено</span>' : someReturned ? '<span class="badge badge-warn" style="font-size:11px">⚠️ Частково повернено</span>' : ''}
           ${hasUnreturned ? `<button class="btn btn-warn btn-sm" onclick="confirmReturnAll(${JSON.stringify(unreturnedIds).replace(/"/g,"'")})" style="font-size:12px">↩ Повернути всі</button>` : ''}
-          <button class="btn btn-primary btn-sm" onclick="printJournalGroup('${escapedKey}')" style="font-size:12px">🖨️ Накладна</button>
+          <button class="btn btn-primary btn-sm" onclick="printJournalGroup(this.dataset.key)" data-key="${groupKey}" style="font-size:12px">🖨️ Накладна</button>
         </div>
       </div>
       <div class="tbl-wrap" style="margin:0">
@@ -3354,8 +3360,6 @@ async function saveAct() {
   // Open print after save for new acts
   if (!editId) setTimeout(() => printAct(savedId), 400);
 }
-
-// (pushInventoryToSheets defined above)
 
 async function deleteAct(id) {
   if (!confirm('Видалити акт?')) return;
@@ -4099,6 +4103,29 @@ async function reloadActsFromPreloaded() {
   if (document.getElementById('page-acts')?.classList.contains('active')) renderActs();
 }
 
+async function addMissingActsToInventory() {
+  const acts = await dbGetAll('acts');
+  const inv = await dbGetAll('inventory');
+  const existingActNums = new Set(inv.map(i => i.actNum).filter(Boolean));
+  const goodActs = acts.filter(a => a.result === '+' && a.actNum && !existingActNums.has(a.actNum));
+  if (!goodActs.length) { showNotif('\u2705 \u0412\u0441\u0456 \u043f\u0430\u0440\u0442\u0456\u0457 \u0432\u0436\u0435 \u0454 \u043d\u0430 \u0441\u043a\u043b\u0430\u0434\u0456'); return; }
+  let added = 0;
+  for (const a of goodActs) {
+    const qtyStr = String(a.qty||'1').replace(/[^0-9.,]/g,'');
+    const qty = parseFloat(qtyStr.replace(',','.')) || 1;
+    const unit = a.unit || (String(a.qty||'').includes('\u043c') ? '\u043c' : String(a.qty||'').includes('\u043a-\u0442') ? '\u043a-\u0442' : '\u0448\u0442');
+    await dbAdd('inventory', {
+      name: a.name, pn: a.pn||'', sn: a.sn||'', category: a.category,
+      qty, minQty: 0, unit, location: '', notes: '\u0410\u043a\u0442 ' + a.actNum,
+      createdAt: a.date||now(), source: 'act', actNum: a.actNum,
+      supplier: a.supplier||'', actDate: a.date||''
+    });
+    added++;
+  }
+  showNotif('\u2705 \u0414\u043e\u0434\u0430\u043d\u043e ' + added + ' \u043f\u0430\u0440\u0442\u0456\u0439');
+  renderInventory(); loadDashboard();
+}
+
 async function fixJournalPns() {
   const journal = await dbGetAll('journal');
   const inv = await dbGetAll('inventory');
@@ -4195,29 +4222,6 @@ async function restoreFromSheets() {
   } catch(e) {
     showNotif('❌ Помилка відновлення: ' + e.message, 'err');
   }
-}
-
-async function addMissingActsToInventory() {
-  const acts = await dbGetAll('acts');
-  const inv = await dbGetAll('inventory');
-  const existingActNums = new Set(inv.map(i => i.actNum).filter(Boolean));
-  const goodActs = acts.filter(a => a.result === '+' && a.actNum && !existingActNums.has(a.actNum));
-  if (!goodActs.length) { showNotif('✅ Всі партії вже є на складі'); return; }
-  let added = 0;
-  for (const a of goodActs) {
-    const qtyStr = String(a.qty||'1').replace(/[^\d.,]/g,'');
-    const qty = parseFloat(qtyStr.replace(',','.')) || 1;
-    const unit = a.unit || (String(a.qty||'').includes('м') ? 'м' : String(a.qty||'').includes('к-т') ? 'к-т' : 'шт');
-    await dbAdd('inventory', {
-      name: a.name, pn: a.pn||'', sn: a.sn||'', category: a.category,
-      qty, minQty: 0, unit, location: '', notes: 'Акт ' + a.actNum,
-      createdAt: a.date||now(), source: 'act', actNum: a.actNum,
-      supplier: a.supplier||'', actDate: a.date||''
-    });
-    added++;
-  }
-  showNotif('✅ Додано ' + added + ' партій зі актів');
-  renderInventory(); loadDashboard();
 }
 
 async function syncActsToInventory() {
