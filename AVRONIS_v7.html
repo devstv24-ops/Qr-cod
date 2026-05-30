@@ -724,6 +724,7 @@ select option { background: var(--surface2); }
           <button class="btn btn-primary" onclick="syncActsToInventory().then(()=>{renderBackupStats();loadDashboard();})">🔄 Синхронізувати акти → склад</button>
           <button class="btn btn-warn" onclick="reloadActsFromPreloaded()">♻️ Перезавантажити реєстр актів</button>
           <button class="btn btn-ghost" onclick="fixJournalPns()" title="Виправити pn в старих записах журналу щоб збіглись зі складом">🔧 Виправити pn в журналі</button>
+          <button class="btn btn-warn" onclick="addMissingActsToInventory()" title="Додати на склад партії з актів яких ще немає">➕ Додати відсутні партії зі актів</button>
           <button class="btn btn-success" onclick="autoBackupToSheets().then(()=>showNotif('✅ Бекап збережено в Google Sheets'))">☁️ Зберегти бекап в Sheets</button>
           <button class="btn btn-ghost" onclick="restoreFromSheets()" style="border-color:var(--orange);color:var(--orange)">⬇️ Відновити з Sheets</button>
           <div id="backup-status" style="font-size:12px;color:var(--text2);margin-top:8px"></div>
@@ -2812,10 +2813,10 @@ async function renderJournal(searchVal) {
   const search = (searchVal !== undefined ? searchVal : (document.getElementById('journal-search')?.value || '')).toLowerCase();
   entries.sort((a,b) => new Date(b.date) - new Date(a.date));
 
-  // Групуємо по reqNum
+  // Групуємо по reqNum (якщо reqNum порожній — кожен запис окремо)
   const groups = new Map();
   for (const e of entries) {
-    const key = e.reqNum || ('—' + e.date?.slice(0,10));
+    const key = (e.reqNum && e.reqNum.trim()) ? e.reqNum.trim() : ('__solo__' + e.id);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(e);
   }
@@ -2827,12 +2828,13 @@ async function renderJournal(searchVal) {
   }
 
   let html = '';
-  for (const [reqNum, rows] of groups) {
+  for (const [groupKey, rows] of groups) {
     const first = rows[0];
+    const displayReqNum = groupKey.startsWith('__solo__') ? `(${fmtDate(first.date).split(' ')[0]})` : groupKey;
     // Фільтрація пошуком — з нормалізацією pn
     const searchNorm = normPn(search);
     const matchSearch = !search ||
-      (reqNum||'').toLowerCase().includes(search) ||
+      (displayReqNum||'').toLowerCase().includes(search) ||
       rows.some(r =>
         (r.name||'').toLowerCase().includes(search) ||
         (r.pn||'').toLowerCase().includes(search) ||
@@ -2849,11 +2851,12 @@ async function renderJournal(searchVal) {
     const someReturned = rows.some(r => r.returned);
     const hasUnreturned = rows.some(r => !r.returned);
     const unreturnedIds = rows.filter(r => !r.returned).map(r => r.id);
+    const escapedKey = groupKey.replace(/'/g, "\'");
 
     html += `<div style="border:1px solid var(--border);border-radius:8px;margin-bottom:12px;overflow:hidden">
       <div style="background:var(--surface2);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <div>
-          <span style="font-weight:700;color:var(--accent);font-size:14px">${reqNum}</span>
+          <span style="font-weight:700;color:var(--accent);font-size:14px">${displayReqNum}</span>
           <span style="margin-left:12px;color:var(--text2);font-size:12px">📅 ${fmtDate(first.date).split(' ')[0]}</span>
           <span style="margin-left:10px;font-size:12px">⚙️ ${first.aggregate||'—'}${first.project?' / '+first.project:''}</span>
           <span style="margin-left:10px;font-size:12px">👷 ${first.executor||'—'}</span>
@@ -2862,7 +2865,7 @@ async function renderJournal(searchVal) {
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           ${allReturned ? '<span class="badge badge-ok" style="font-size:11px">↩ Повністю повернено</span>' : someReturned ? '<span class="badge badge-warn" style="font-size:11px">⚠️ Частково повернено</span>' : ''}
           ${hasUnreturned ? `<button class="btn btn-warn btn-sm" onclick="confirmReturnAll(${JSON.stringify(unreturnedIds).replace(/"/g,"'")})" style="font-size:12px">↩ Повернути всі</button>` : ''}
-          <button class="btn btn-primary btn-sm" onclick="printJournalGroup('${reqNum}')" style="font-size:12px">🖨️ Накладна</button>
+          <button class="btn btn-primary btn-sm" onclick="printJournalGroup('${escapedKey}')" style="font-size:12px">🖨️ Накладна</button>
         </div>
       </div>
       <div class="tbl-wrap" style="margin:0">
@@ -2922,7 +2925,7 @@ async function confirmReturnAll(ids) {
 
 async function printJournalGroup(reqNumKey) {
   const entries = await dbGetAll('journal');
-  const rows = entries.filter(e => (e.reqNum || ('—' + e.date?.slice(0,10))) === reqNumKey);
+  const rows = entries.filter(e => { const k = (e.reqNum && e.reqNum.trim()) ? e.reqNum.trim() : ('__solo__' + e.id); return k === reqNumKey; });
   if (!rows.length) return;
   const first = rows[0];
 
@@ -3352,29 +3355,7 @@ async function saveAct() {
   if (!editId) setTimeout(() => printAct(savedId), 400);
 }
 
-// Автоматично надсилає весь склад в Google Sheets після змін
-async function pushInventoryToSheets() {
-  try {
-    const inv = await dbGetAll('inventory');
-    const items = inv.map(i => ({
-      name: i.name || '',
-      pn: i.pn || '',
-      category: i.category || '',
-      qty: i.qty || 0,
-      unit: i.unit || 'шт',
-      location: i.location || '',
-      notes: i.notes || ''
-    }));
-    await fetch(GAS_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'updateInventory', items })
-    });
-  } catch(e) {
-    console.warn('Inventory sync error:', e);
-  }
-}
+// (pushInventoryToSheets defined above)
 
 async function deleteAct(id) {
   if (!confirm('Видалити акт?')) return;
@@ -4214,6 +4195,29 @@ async function restoreFromSheets() {
   } catch(e) {
     showNotif('❌ Помилка відновлення: ' + e.message, 'err');
   }
+}
+
+async function addMissingActsToInventory() {
+  const acts = await dbGetAll('acts');
+  const inv = await dbGetAll('inventory');
+  const existingActNums = new Set(inv.map(i => i.actNum).filter(Boolean));
+  const goodActs = acts.filter(a => a.result === '+' && a.actNum && !existingActNums.has(a.actNum));
+  if (!goodActs.length) { showNotif('✅ Всі партії вже є на складі'); return; }
+  let added = 0;
+  for (const a of goodActs) {
+    const qtyStr = String(a.qty||'1').replace(/[^\d.,]/g,'');
+    const qty = parseFloat(qtyStr.replace(',','.')) || 1;
+    const unit = a.unit || (String(a.qty||'').includes('м') ? 'м' : String(a.qty||'').includes('к-т') ? 'к-т' : 'шт');
+    await dbAdd('inventory', {
+      name: a.name, pn: a.pn||'', sn: a.sn||'', category: a.category,
+      qty, minQty: 0, unit, location: '', notes: 'Акт ' + a.actNum,
+      createdAt: a.date||now(), source: 'act', actNum: a.actNum,
+      supplier: a.supplier||'', actDate: a.date||''
+    });
+    added++;
+  }
+  showNotif('✅ Додано ' + added + ' партій зі актів');
+  renderInventory(); loadDashboard();
 }
 
 async function syncActsToInventory() {
