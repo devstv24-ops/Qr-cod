@@ -2554,17 +2554,14 @@ function toggleIssueRow(cb) {
 }
 
 function filterInvSelect(filterInput, idx) {
-  const raw = filterInput.value.trim();
-  const q = raw.toLowerCase().replace(/[*]/g,'');
+  const q = filterInput.value.toLowerCase().trim().replace(/\*/g,'');
   const sel = document.querySelector(`.issue-inv-select[data-idx="${idx}"]`);
   if (!sel) return;
   Array.from(sel.options).forEach(opt => {
     if (!opt.value) { opt.style.display = ''; return; }
-    const text = opt.text.toLowerCase().replace(/[*]/g,'');
-    opt.style.display = (!q || text.includes(q)) ? '' : 'none';
+    const text = opt.text.toLowerCase().replace(/\*/g,'');
+    opt.style.display = text.includes(q) ? '' : 'none';
   });
-  // Show all if field cleared
-  if (!q) Array.from(sel.options).forEach(o => o.style.display = '');
 }
 function invSearchFocus(el) {
   const idx = el.dataset.idx;
@@ -2835,7 +2832,7 @@ async function renderJournal(searchVal) {
   // Групуємо по reqNum
   const groups = new Map();
   for (const e of entries) {
-    const key = e.reqNum || ('—' + e.date?.slice(0,10));
+    const key = (e.reqNum && e.reqNum.trim()) ? e.reqNum.trim() : ('__solo__' + e.id);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(e);
   }
