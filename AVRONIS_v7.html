@@ -1825,7 +1825,16 @@ let pendingIssueReqId = null;
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 function now() { return new Date().toISOString(); }
 // Нормалізація pn для порівняння: lowercase, без зайвих пробілів, без * в кінці
-function normPn(pn) { return (pn||'').toLowerCase().replace(/[^a-z0-9а-яёіїєґ]/gi,''); }
+function normPn(pn) {
+  return (pn||'')
+    .replace(/I/g,'і').replace(/i/g,'і')
+    .replace(/A/g,'а').replace(/E/g,'е').replace(/e/g,'е')
+    .replace(/O/g,'о').replace(/o/g,'о')
+    .replace(/P/g,'р').replace(/T/g,'т')
+    .replace(/H/g,'н').replace(/X/g,'х').replace(/x/g,'х')
+    .replace(/K/g,'к').replace(/M/g,'м').replace(/B/g,'в').replace(/C/g,'с')
+    .toLowerCase().replace(/[^a-z0-9а-яёіїєґ]/gi,'');
+}
 function fmtDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -2545,14 +2554,17 @@ function toggleIssueRow(cb) {
 }
 
 function filterInvSelect(filterInput, idx) {
-  const q = filterInput.value.toLowerCase().trim().replace(/\*/g,'');
+  const raw = filterInput.value.trim();
+  const q = raw.toLowerCase().replace(/[*]/g,'');
   const sel = document.querySelector(`.issue-inv-select[data-idx="${idx}"]`);
   if (!sel) return;
   Array.from(sel.options).forEach(opt => {
     if (!opt.value) { opt.style.display = ''; return; }
-    const text = opt.text.toLowerCase().replace(/\*/g,'');
-    opt.style.display = text.includes(q) ? '' : 'none';
+    const text = opt.text.toLowerCase().replace(/[*]/g,'');
+    opt.style.display = (!q || text.includes(q)) ? '' : 'none';
   });
+  // Show all if field cleared
+  if (!q) Array.from(sel.options).forEach(o => o.style.display = '');
 }
 function invSearchFocus(el) {
   const idx = el.dataset.idx;
