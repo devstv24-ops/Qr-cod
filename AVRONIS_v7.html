@@ -555,7 +555,7 @@ select option { background: var(--surface2); }
             <option>Інструмент</option>
             <option>Обладнання</option>
             <option>Вимірювальний інструмент</option>
-            <option>Тара</option>
+            <option>Тара та пакувальні матеріали</option>
             <option>Компонент в ТО</option>
             <option>Комплектуючі для ТО</option>
             <option>Агрегат</option>
@@ -1104,7 +1104,7 @@ select option { background: var(--surface2); }
             <option>Інструмент</option>
             <option>Обладнання</option>
             <option>Вимірювальний інструмент</option>
-            <option>Тара</option>
+            <option>Тара та пакувальні матеріали</option>
             <option>Компонент в ТО</option>
             <option>Комплектуючі для ТО</option>
             <option>Агрегат</option>
@@ -2875,9 +2875,9 @@ async function renderJournal(searchVal) {
         </div>
       </div>
       <div class="tbl-wrap" style="margin:0">
-        <table style="table-layout:fixed;width:100%">
+        <table>
           <thead><tr style="font-size:11px">
-            <th style="width:160px">PN</th><th>Найменування</th><th style="width:90px">К-сть</th><th style="width:220px">Акт ВК / Постачальник</th><th style="width:130px">Статус</th>
+            <th>PN</th><th>Найменування</th><th>К-сть</th><th>Акт ВК / Постачальник</th><th>Статус</th>
           </tr></thead>
           <tbody>
             ${rows.map(e => {
