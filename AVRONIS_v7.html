@@ -2724,7 +2724,13 @@ async function confirmIssue() {
       qty: it.qty, unit: it._selUnit || it.unit||'шт',
       executor: req.executor, storekeeper, workplace: req.workplace,
       category: invItem ? (invItem.category || it.category || '') : (it.category || ''),
-      sourceActNum, sourceSupplier
+      sourceActNum, sourceSupplier,
+      _selPn: it._selPn || (invItem ? invItem.pn : null),
+      _selName: it._selName || (invItem ? invItem.name : null),
+      _selUnit: it._selUnit || (invItem ? invItem.unit : null),
+      _selActNum: it._selActNum || (invItem ? invItem.actNum : null),
+      _selSupplier: it._selSupplier || (invItem ? invItem.supplier : null),
+      _invId: invItem ? invItem.id : null
     });
   }
 
@@ -2875,9 +2881,9 @@ async function renderJournal(searchVal) {
         </div>
       </div>
       <div class="tbl-wrap" style="margin:0">
-        <table>
+        <table style="table-layout:fixed;width:100%">
           <thead><tr style="font-size:11px">
-            <th>PN</th><th>Найменування</th><th>К-сть</th><th>Акт ВК / Постачальник</th><th>Статус</th>
+            <th style="width:130px">PN</th><th>Найменування</th><th style="width:80px">К-сть</th><th style="width:190px">Акт ВК / Постачальник</th><th style="width:130px">Статус</th>
           </tr></thead>
           <tbody>
             ${rows.map(e => {
@@ -2929,14 +2935,22 @@ async function confirmReturnAll(ids) {
     // Повертаємо qty на склад
     const retQty = parseFloat(String(entry.qty||'0').replace(/[^\d.,]/g,'').replace(',','.')) || 0;
     if (retQty <= 0) continue;
-    const pnNorm = normPn(entry._selPn || entry.pn || '');
     let invItem = null;
-    if (entry._selActNum) {
-      invItem = allInv.find(i => i.actNum === entry._selActNum && normPn(i.pn) === pnNorm);
+    // Спочатку шукаємо по ID (найточніше)
+    if (entry._invId) {
+      invItem = allInv.find(i => i.id === entry._invId);
     }
-    if (!invItem && pnNorm) {
-      invItem = allInv.find(i => normPn(i.pn) === pnNorm);
+    // Потім по actNum + pn
+    if (!invItem && (entry._selActNum || entry.sourceActNum)) {
+      const actN = entry._selActNum || entry.sourceActNum;
+      invItem = allInv.find(i => i.actNum === actN);
     }
+    // Потім по pn
+    if (!invItem) {
+      const pnNorm = normPn(entry._selPn || entry.pn || '');
+      if (pnNorm) invItem = allInv.find(i => normPn(i.pn) === pnNorm);
+    }
+    // Потім по назві
     if (!invItem) {
       invItem = allInv.find(i => normPn(i.name) === normPn(entry._selName || entry.name || ''));
     }
@@ -3069,12 +3083,32 @@ async function executeReturn() {
 
   // Повертаємо кількість на склад
   const allInv = await dbGetAll('inventory');
-  const pnKey = (entry.pn||'').toLowerCase().trim();
-  const existing = pnKey
-    ? allInv.find(i => (i.pn||'').toLowerCase().trim() === pnKey && i.category === entry.category)
-    : allInv.find(i => i.name === entry.name && i.category === entry.category);
+  const pnKey = normPn(entry._selPn || entry.pn || '');
+  const actKey = entry._selActNum || entry.sourceActNum || '';
+  const existing = entry._invId
+    ? allInv.find(i => i.id === entry._invId)
+    : actKey
+      ? allInv.find(i => i.actNum === actKey)
+      : pnKey
+        ? allInv.find(i => normPn(i.pn) === pnKey)
+        : allInv.find(i => i.name === entry.name && i.category === entry.category);
 
   const retQty = parseFloat(String(entry.qty||'0').replace(/[^\d.,]/g,'').replace(',','.')) || 0;
+
+  // Шукаємо по ID якщо є
+  if (entry._invId && !existing) {
+    const byId = allInv.find(i => i.id === entry._invId);
+    if (byId) {
+      byId.qty = Math.round(((parseFloat(byId.qty)||0) + retQty) * 1000) / 1000;
+      byId.notes = (byId.notes ? byId.notes + ', ' : '') + `Повернено ${entry.reqNum||'—'} ${now().slice(0,10)}`;
+      await dbPut('inventory', byId);
+      closeModal('modal-return');
+      _pendingReturnId = null;
+      showNotif(`✅ Повернено на склад: ${entry.name} — ${entry.qty} ${entry.unit||'шт'}`);
+      renderJournal(); renderInventory(); loadDashboard();
+      return;
+    }
+  }
 
   if (existing) {
     existing.qty = Math.round(((parseFloat(existing.qty)||0) + retQty) * 1000) / 1000;
