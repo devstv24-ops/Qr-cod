@@ -1826,7 +1826,23 @@ let pendingIssueReqId = null;
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 function now() { return new Date().toISOString(); }
 // Нормалізація pn для порівняння: lowercase, без зайвих пробілів, без * в кінці
-function normPn(pn) { return (pn||'').toLowerCase().replace(/[^a-z0-9а-яёіїєґ]/gi,''); }
+function normPn(pn) {
+  // Замінюємо латинські символи що схожі на кириличні (і навпаки)
+  const s = (pn||'').toString()
+    .replace(/І/g,'I').replace(/і/g,'i')   // кирилиця І -> латинська I
+    .replace(/А/g,'A').replace(/а/g,'a')
+    .replace(/Е/g,'E').replace(/е/g,'e')
+    .replace(/О/g,'O').replace(/о/g,'o')
+    .replace(/Р/g,'P').replace(/р/g,'p')
+    .replace(/С/g,'C').replace(/с/g,'c')
+    .replace(/Т/g,'T').replace(/т/g,'t')
+    .replace(/Н/g,'H').replace(/н/g,'h')
+    .replace(/Х/g,'X').replace(/х/g,'x')
+    .replace(/К/g,'K').replace(/к/g,'k')
+    .replace(/М/g,'M').replace(/м/g,'m')
+    .replace(/В/g,'B').replace(/в/g,'b');
+  return s.toLowerCase().replace(/[^a-z0-9]/g,'');
+}
 function fmtDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -2462,9 +2478,17 @@ async function openConfirmIssue(reqId) {
     if (!matchingInv.length && nameNorm) {
       matchingInv = aggInv.filter(i => (i.name||'').toLowerCase().trim() === nameNorm);
     }
-    const sortedInv = matchingInv.length > 0
-      ? [...matchingInv].sort((a,b) => (b.qty > 0 ? 1 : 0) - (a.qty > 0 ? 1 : 0))
-      : aggInv;
+    // Якщо не знайдено по pn - шукаємо по назві ширше
+    if (!matchingInv.length && nameNorm) {
+      matchingInv = aggInv.filter(i => (i.name||'').toLowerCase().replace(/[^a-zа-яіїєґ0-9]/gi,'').includes(nameNorm.slice(0,6)));
+    }
+    const sortedInv = [...aggInv].sort((a,b) => {
+      // Партії що збігаються по pn - першими
+      const aMatch = matchingInv.some(m => m.id === a.id) ? 1 : 0;
+      const bMatch = matchingInv.some(m => m.id === b.id) ? 1 : 0;
+      if (bMatch !== aMatch) return bMatch - aMatch;
+      return (b.qty > 0 ? 1 : 0) - (a.qty > 0 ? 1 : 0);
+    });
 
     // Загальна кількість по всіх партіях цього pn
     const totalOnStock = matchingInv.reduce((sum, i) => sum + (parseFloat(i.qty)||0), 0);
