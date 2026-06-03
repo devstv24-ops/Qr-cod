@@ -3505,41 +3505,15 @@ async function saveAct() {
         const converted = convertUnits(rawQty, actUnitVal, stockUnitVal);
         if (converted !== null) { stockQty = converted; stockUnit = stockUnitVal; }
       }
-      // Перевіряємо чи вже є така позиція на складі — спочатку по actNum (точно)
-      const existing = await dbGetAll('inventory');
-      const found = existing.find(i => i.actNum && i.actNum === actNum) ||
-        existing.find(i =>
-          (obj.pn && i.pn && normPn(i.pn) === normPn(obj.pn) && i.actNum === actNum) ||
-          (!obj.pn && normPn(i.name) === normPn(name) && i.category === cat && i.actNum === actNum)
-        );
-      if (found) {
-        found.qty = Math.round(((parseFloat(found.qty) || 0) + stockQty) * 1000) / 1000;
-        found.notes = (found.notes ? found.notes + ', ' : '') + `Акт ${actNum}`;
-        await dbPut('inventory', found);
-        showNotif(`✅ Акт збережено. Склад: +${stockQty} ${stockUnit} до існуючої позиції`);
-      } else {
-        await dbAdd('inventory', {
-          name, pn: obj.pn, sn: obj.sn, category: cat,
-          qty: stockQty, minQty: 0,
-          unit: stockUnit, location: obj.storage || obj.notes || '', notes: `Акт ${actNum}`,
-          createdAt: obj.date, source: 'act', actNum,
-          supplier: obj.supplier || '', actDate: obj.date || ''
-        });
-        showNotif(`✅ Акт збережено + додано на склад: ${stockQty} ${stockUnit}`);
-      }
-    } else {
-      showNotif('Акт збережено');
-    }
-    // Маркування — зберігаємо в IndexedDB щоб не зникало після перезавантаження
-    if (toolMarking) {
-      const nextNum = PRELOADED_TOOLS.length + ((await dbGetAll('tools_edits')).filter(e=>e._isNewTool).length) + 1;
-      await dbAdd('tools_edits', {
-        marking: toolMarking, name: obj.name, pn: obj.pn || '',
-        type: 'Стандартний', actNum: obj.actNum,
-        location: 'Warehouse and incoming inspection area',
-        responsible: obj.inspector || '', markingStatus: 'Очікує нанесення',
-        num: String(nextNum), _isNewTool: true, updatedAt: now()
+      // Завжди додаємо нову позицію — кожен акт унікальний по actNum
+      await dbAdd('inventory', {
+        name, pn: obj.pn, sn: obj.sn, category: cat,
+        qty: stockQty, minQty: 0,
+        unit: stockUnit, location: obj.storage || '', notes: `Акт ${actNum}`,
+        createdAt: obj.date, source: 'act', actNum,
+        supplier: obj.supplier || '', actDate: obj.date || ''
       });
+      showNotif(`✅ Акт збережено + додано на склад: ${stockQty} ${stockUnit}`);
       toolsData = null;
       showNotif(`✅ Акт збережено. Маркування: ${toolMarking}. Додано до реєстру інструментів.`);
     }
