@@ -555,7 +555,7 @@ select option { background: var(--surface2); }
             <option>Інструмент</option>
             <option>Обладнання</option>
             <option>Вимірювальний інструмент</option>
-            <option>Тара та пакувальні матеріали</option>
+            <option>Тара</option>
             <option>Компонент в ТО</option>
             <option>Комплектуючі для ТО</option>
             <option>Агрегат</option>
@@ -1104,7 +1104,7 @@ select option { background: var(--surface2); }
             <option>Інструмент</option>
             <option>Обладнання</option>
             <option>Вимірювальний інструмент</option>
-            <option>Тара та пакувальні матеріали</option>
+            <option>Тара</option>
             <option>Компонент в ТО</option>
             <option>Комплектуючі для ТО</option>
             <option>Агрегат</option>
@@ -2664,7 +2664,7 @@ async function confirmIssue() {
     const qtyInput = document.querySelector(`.issue-qty-input[data-idx="${idx}"]`);
     const invSelectEl = document.querySelector(`.issue-inv-select[data-idx="${idx}"]`);
     if (cb && cb.checked) {
-      const actualQty = parseFloat(qtyInput?.value || it.qty) || it.qty;
+      const actualQty = parseFloat(qtyInput?.value) > 0 ? parseFloat(qtyInput.value) : (parseFloat(it.qty) || 1);
       const selVal = invSelectEl?.value || '';
       let _selPn = null, _selName = null, _selUnit = null, _selActNum = null, _selSupplier = null;
       if (selVal) {
@@ -2875,9 +2875,9 @@ async function renderJournal(searchVal) {
         </div>
       </div>
       <div class="tbl-wrap" style="margin:0">
-        <table>
+        <table style="table-layout:fixed;width:100%">
           <thead><tr style="font-size:11px">
-            <th>PN</th><th>Найменування</th><th>К-сть</th><th>Акт ВК / Постачальник</th><th>Статус</th>
+            <th style="width:150px">PN</th><th>Найменування</th><th style="width:80px">К-сть</th><th style="width:200px">Акт ВК / Постачальник</th><th style="width:120px">Статус</th>
           </tr></thead>
           <tbody>
             ${rows.map(e => {
@@ -3343,13 +3343,38 @@ async function saveAct() {
     } else {
       showNotif('Акт збережено');
     }
-    // Маркування для інструменту
+    // Маркування для інструменту — додаємо в таблицю
     if (toolMarking) {
+      const newTool = {
+        num: String(PRELOADED_TOOLS.length + 1),
+        name: obj.name,
+        pn: obj.pn || '',
+        type: 'Стандартний',
+        actNum: obj.actNum,
+        marking: toolMarking,
+        location: 'Warehouse and incoming inspection area',
+        responsible: obj.inspector || '',
+        markingStatus: 'Очікує нанесення'
+      };
+      PRELOADED_TOOLS.push(newTool);
       toolsData = null;
-      showNotif(`✅ Акт збережено. Маркування: ${toolMarking}`);
+      showNotif(`✅ Акт збережено. Маркування: ${toolMarking}. Додано до реєстру інструментів.`);
     }
     if (measMarking) {
-      showNotif(`✅ Акт збережено. Маркування: ${measMarking}`);
+      const newMeas = {
+        num: String(PRELOADED_MEASURING.length + 1),
+        name: obj.name,
+        pn: obj.pn || '',
+        sn: measMarking,
+        range: '',
+        location: 'Warehouse and incoming inspection area',
+        period: '12 міс.',
+        lastCal: '',
+        nextCal: '',
+        status: 'Received – Calibration Pending'
+      };
+      PRELOADED_MEASURING.push(newMeas);
+      showNotif(`✅ Акт збережено. Маркування: ${measMarking}. Додано до реєстру вим. інструменту.`);
     }
   }
 
