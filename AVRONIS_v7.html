@@ -3459,8 +3459,36 @@ async function saveAct() {
   let savedId;
   if (editId) {
     obj.id = parseInt(editId);
+
+    // Оновлюємо склад: видаляємо старий запис по actNum, додаємо новий якщо result='+'
+    const allInv = await dbGetAll('inventory');
+    const oldInvItems = allInv.filter(i => i.actNum === actNum);
+    for (const old of oldInvItems) {
+      await dbDelete('inventory', old.id);
+    }
+
+    if (result === '+') {
+      const TOOL_CATS = new Set(['Інструмент','Обладнання','Вимірювальний інструмент']);
+      const rawQty = parseFloat(String(obj.qty||'1').replace(/[^\d.,]/g,'').replace(',','.')) || 1;
+      const actUnitVal = obj.unit || 'шт';
+      const stockUnitVal = obj.stockUnit || '';
+      let stockQty = rawQty;
+      let stockUnit = actUnitVal;
+      if (stockUnitVal && stockUnitVal !== actUnitVal) {
+        const converted = convertUnits(rawQty, actUnitVal, stockUnitVal);
+        if (converted !== null) { stockQty = converted; stockUnit = stockUnitVal; }
+      }
+      await dbAdd('inventory', {
+        name: obj.name, pn: obj.pn, sn: obj.sn, category: obj.category,
+        qty: stockQty, minQty: 0, unit: stockUnit,
+        location: obj.storage || '', notes: `Акт ${actNum}`,
+        createdAt: obj.date, source: 'act', actNum,
+        supplier: obj.supplier || '', actDate: obj.date || ''
+      });
+    }
+
     await dbPut('acts', obj);
-    showNotif('Акт оновлено');
+    showNotif('Акт оновлено. Склад синхронізовано.');
     savedId = parseInt(editId);
   } else {
     savedId = await dbAdd('acts', obj);
