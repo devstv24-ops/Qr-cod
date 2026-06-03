@@ -2916,15 +2916,55 @@ async function renderJournal(searchVal) {
 
 async function confirmReturnAll(ids) {
   const idArr = Array.isArray(ids) ? ids : JSON.parse(ids);
-  if (!confirm(`Повернути всі ${idArr.length} невидані позиції на склад?`)) return;
+  if (!confirm(`Повернути всі ${idArr.length} позицій на склад?`)) return;
+  const allInv = await dbGetAll('inventory');
+  let returned = 0;
   for (const id of idArr) {
     const entry = await dbGet('journal', id);
     if (!entry || entry.returned) continue;
     entry.returned = true;
     entry.returnedAt = now();
     await dbPut('journal', entry);
+
+    // Повертаємо qty на склад
+    const retQty = parseFloat(String(entry.qty||'0').replace(/[^\d.,]/g,'').replace(',','.')) || 0;
+    if (retQty <= 0) continue;
+    const pnNorm = normPn(entry._selPn || entry.pn || '');
+    let invItem = null;
+    if (entry._selActNum) {
+      invItem = allInv.find(i => i.actNum === entry._selActNum && normPn(i.pn) === pnNorm);
+    }
+    if (!invItem && pnNorm) {
+      invItem = allInv.find(i => normPn(i.pn) === pnNorm);
+    }
+    if (!invItem) {
+      invItem = allInv.find(i => normPn(i.name) === normPn(entry._selName || entry.name || ''));
+    }
+    if (invItem) {
+      const stockUnit = invItem.unit || 'шт';
+      const reqUnit = entry._selUnit || entry.unit || 'шт';
+      let addQty = retQty;
+      if (stockUnit !== reqUnit) {
+        const conv = convertUnits(retQty, reqUnit, stockUnit);
+        if (conv !== null) addQty = conv;
+      }
+      invItem.qty = Math.round(((parseFloat(invItem.qty)||0) + addQty) * 1000) / 1000;
+      invItem.notes = (invItem.notes ? invItem.notes + ', ' : '') + `Повернено ${entry.reqNum||'—'} ${now().slice(0,10)}`;
+      await dbPut('inventory', invItem);
+    } else {
+      // Позиції немає — створюємо
+      await dbAdd('inventory', {
+        name: entry._selName || entry.name, pn: entry._selPn || entry.pn || '',
+        sn: '', category: entry.category || '',
+        qty: retQty, minQty: 0, unit: entry._selUnit || entry.unit || 'шт',
+        location: '', notes: `Повернено ${entry.reqNum||'—'} ${now().slice(0,10)}`,
+        createdAt: now().slice(0,10), source: 'return',
+        actNum: entry._selActNum || '', supplier: entry._selSupplier || ''
+      });
+    }
+    returned++;
   }
-  showNotif(`✅ Повернено ${idArr.length} позицій на склад`);
+  showNotif(`✅ Повернено ${returned} позицій на склад`);
   renderJournal();
   renderInventory(); loadDashboard();
 }
