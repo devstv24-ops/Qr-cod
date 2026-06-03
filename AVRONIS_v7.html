@@ -1342,6 +1342,26 @@ select option { background: var(--surface2); }
   </div>
 </div>
 
+<!-- PRINT DATE MODAL -->
+<div class="modal-overlay" id="modal-print-date">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-hdr">
+      <div class="modal-title">📅 Дата накладної</div>
+      <button class="modal-close" onclick="closeModal('modal-print-date')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Вкажіть дату (можна змінити)</label>
+        <input type="date" id="print-date-input">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-print-date')">Скасувати</button>
+      <button class="btn btn-primary" onclick="_doPrintJournalGroup()">🖨️ Друкувати</button>
+    </div>
+  </div>
+</div>
+
 <!-- MOBILE PREVIEW MODAL -->
 <div class="modal-overlay" id="modal-mobile">
   <div class="modal" style="max-width:420px">
@@ -3015,17 +3035,27 @@ async function confirmReturnAll(ids) {
   renderInventory(); loadDashboard();
 }
 
+let _printJournalKey = null;
+
 async function printJournalGroup(reqNumKey) {
   const entries = await dbGetAll('journal');
   const rows = entries.filter(e => { const k = (e.reqNum && e.reqNum.trim()) ? e.reqNum.trim() : ('__solo__' + e.id); return k === reqNumKey; });
   if (!rows.length) return;
   const first = rows[0];
-
-  // Питаємо дату перед друком
   const defaultDate = first.date ? first.date.slice(0,10) : new Date().toISOString().slice(0,10);
-  const printDate = prompt('Дата накладної (можна змінити):', defaultDate);
-  if (printDate === null) return; // скасовано
-  const displayDate = printDate || defaultDate;
+  _printJournalKey = reqNumKey;
+  document.getElementById('print-date-input').value = defaultDate;
+  openModal('modal-print-date');
+}
+
+async function _doPrintJournalGroup() {
+  closeModal('modal-print-date');
+  const reqNumKey = _printJournalKey;
+  const displayDate = document.getElementById('print-date-input').value || new Date().toISOString().slice(0,10);
+  const entries = await dbGetAll('journal');
+  const rows = entries.filter(e => { const k = (e.reqNum && e.reqNum.trim()) ? e.reqNum.trim() : ('__solo__' + e.id); return k === reqNumKey; });
+  if (!rows.length) return;
+  const first = rows[0];
 
   const html = `<div style="font-family:Arial,sans-serif;color:#000;max-width:720px">
     <div style="text-align:center;margin-bottom:16px;border-bottom:2px solid #000;padding-bottom:10px">
