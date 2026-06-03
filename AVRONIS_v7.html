@@ -3504,12 +3504,13 @@ async function saveAct() {
     }
     // Маркування — зберігаємо в IndexedDB щоб не зникало після перезавантаження
     if (toolMarking) {
+      const nextNum = PRELOADED_TOOLS.length + ((await dbGetAll('tools_edits')).filter(e=>e._isNewTool).length) + 1;
       await dbAdd('tools_edits', {
         marking: toolMarking, name: obj.name, pn: obj.pn || '',
         type: 'Стандартний', actNum: obj.actNum,
         location: 'Warehouse and incoming inspection area',
         responsible: obj.inspector || '', markingStatus: 'Очікує нанесення',
-        num: '', _isNewTool: true, updatedAt: now()
+        num: String(nextNum), _isNewTool: true, updatedAt: now()
       });
       toolsData = null;
       showNotif(`✅ Акт збережено. Маркування: ${toolMarking}. Додано до реєстру інструментів.`);
