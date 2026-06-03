@@ -724,6 +724,7 @@ select option { background: var(--surface2); }
           <button class="btn btn-primary" onclick="syncActsToInventory().then(()=>{renderBackupStats();loadDashboard();})">🔄 Синхронізувати акти → склад</button>
           <button class="btn btn-warn" onclick="reloadActsFromPreloaded()">♻️ Перезавантажити реєстр актів</button>
           <button class="btn btn-ghost" onclick="fixJournalPns()" title="Виправити pn в старих записах журналу щоб збіглись зі складом">🔧 Виправити pn в журналі</button>
+          <button class="btn btn-ghost" onclick="syncActsToToolsRegistry()" title="Додати інструмент/обладнання з актів в реєстр якщо ще не є">🔧 Додати інструмент з актів до реєстру</button>
           <button class="btn btn-warn" onclick="addMissingActsToInventory()">➕ Додати відсутні партії зі актів</button>
           <button class="btn btn-success" onclick="autoBackupToSheets().then(()=>showNotif('✅ Бекап збережено в Google Sheets'))">☁️ Зберегти бекап в Sheets</button>
           <button class="btn btn-ghost" onclick="restoreFromSheets()" style="border-color:var(--orange);color:var(--orange)">⬇️ Відновити з Sheets</button>
@@ -2487,7 +2488,7 @@ async function openConfirmIssue(reqId) {
       <td>${it.name}</td>
       <td style="text-align:center">
         <input type="number" class="issue-qty-input" data-idx="${idx}"
-          value="${it.qty}" min="0.001" step="0.001"
+          value="${parseFloat(String(it.qty||'1').replace(/[^0-9.,]/g,'').replace(',','.')) || 1}" min="0.001" step="0.001"
           style="width:65px;padding:3px 6px;font-size:12px;text-align:center;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text)"
           ${matchingInv.length === 0 ? 'disabled' : ''}>
         ${reqUnit}
@@ -2664,7 +2665,7 @@ async function confirmIssue() {
     const qtyInput = document.querySelector(`.issue-qty-input[data-idx="${idx}"]`);
     const invSelectEl = document.querySelector(`.issue-inv-select[data-idx="${idx}"]`);
     if (cb && cb.checked) {
-      const actualQty = parseFloat(qtyInput?.value) > 0 ? parseFloat(qtyInput.value) : (parseFloat(it.qty) || 1);
+      const actualQty = parseFloat(qtyInput?.value) > 0 ? parseFloat(qtyInput.value) : (parseFloat(String(it.qty||'1').replace(/[^0-9.,]/g,'').replace(',','.')) || 1);
       const selVal = invSelectEl?.value || '';
       let _selPn = null, _selName = null, _selUnit = null, _selActNum = null, _selSupplier = null;
       if (selVal) {
@@ -2875,9 +2876,9 @@ async function renderJournal(searchVal) {
         </div>
       </div>
       <div class="tbl-wrap" style="margin:0">
-        <table style="table-layout:fixed;width:100%">
+        <table>
           <thead><tr style="font-size:11px">
-            <th style="width:150px">PN</th><th>Найменування</th><th style="width:80px">К-сть</th><th style="width:200px">Акт ВК / Постачальник</th><th style="width:120px">Статус</th>
+            <th>PN</th><th>Найменування</th><th>К-сть</th><th>Акт ВК / Постачальник</th><th>Статус</th>
           </tr></thead>
           <tbody>
             ${rows.map(e => {
@@ -3343,38 +3344,40 @@ async function saveAct() {
     } else {
       showNotif('Акт збережено');
     }
-    // Маркування для інструменту — додаємо в таблицю
+    // Маркування — зберігаємо в IndexedDB щоб не зникало після перезавантаження
     if (toolMarking) {
-      const newTool = {
-        num: String(PRELOADED_TOOLS.length + 1),
+      await dbAdd('tools_edits', {
+        marking: toolMarking,
         name: obj.name,
         pn: obj.pn || '',
         type: 'Стандартний',
         actNum: obj.actNum,
-        marking: toolMarking,
         location: 'Warehouse and incoming inspection area',
         responsible: obj.inspector || '',
-        markingStatus: 'Очікує нанесення'
-      };
-      PRELOADED_TOOLS.push(newTool);
+        markingStatus: 'Очікує нанесення',
+        num: '',
+        _isNewTool: true,
+        updatedAt: now()
+      });
       toolsData = null;
-      showNotif(`✅ Акт збережено. Маркування: ${toolMarking}. Додано до реєстру інструментів.`);
+      showNotif(`✅ Акт збережено. Маркування: ${toolMarking}. Додано до реєстру.`);
     }
     if (measMarking) {
-      const newMeas = {
-        num: String(PRELOADED_MEASURING.length + 1),
+      await dbAdd('meas_edits', {
+        sn: measMarking,
         name: obj.name,
         pn: obj.pn || '',
-        sn: measMarking,
         range: '',
         location: 'Warehouse and incoming inspection area',
         period: '12 міс.',
         lastCal: '',
         nextCal: '',
-        status: 'Received – Calibration Pending'
-      };
-      PRELOADED_MEASURING.push(newMeas);
-      showNotif(`✅ Акт збережено. Маркування: ${measMarking}. Додано до реєстру вим. інструменту.`);
+        status: 'Received – Calibration Pending',
+        num: '',
+        _isNewMeas: true,
+        updatedAt: now()
+      });
+      showNotif(`✅ Акт збережено. Маркування: ${measMarking}. Додано до реєстру.`);
     }
   }
 
@@ -3830,12 +3833,23 @@ const PRELOADED_INVENTORY = [{"name": "Заглушка", "pn": "М18х1,5 16-О
 // ===================== TOOLS =====================
 let toolsData = null;
 async function getToolsData() {
-  // Завжди перечитуємо якщо немає кешу
   if (toolsData) return toolsData;
   const stored = await dbGetAll('tools_edits');
   const edits = {};
-  stored.forEach(e => { edits[e.marking] = e; });
-  toolsData = PRELOADED_TOOLS.map(t => ({...t, ...(edits[t.marking] || {})}));
+  const newTools = [];
+  stored.forEach(e => {
+    if (e._isNewTool) {
+      // Новий інструмент з акту — додаємо окремим рядком
+      newTools.push(e);
+    } else {
+      edits[e.marking] = e;
+    }
+  });
+  // Базові + редагування існуючих + нові з актів
+  toolsData = [
+    ...PRELOADED_TOOLS.map(t => ({...t, ...(edits[t.marking] || {})})),
+    ...newTools
+  ];
   return toolsData;
 }
 
@@ -3946,8 +3960,18 @@ function exportToolsCSV() {
 async function getMeasuringData() {
   const stored = await dbGetAll('meas_edits');
   const editsMap = {};
-  stored.forEach(e => { if (e.sn) editsMap[e.sn] = e; });
-  return PRELOADED_MEASURING.map(m => ({...m, ...(editsMap[m.sn] || {})}));
+  const newMeas = [];
+  stored.forEach(e => {
+    if (e._isNewMeas) {
+      newMeas.push(e);
+    } else if (e.sn) {
+      editsMap[e.sn] = e;
+    }
+  });
+  return [
+    ...PRELOADED_MEASURING.map(m => ({...m, ...(editsMap[m.sn] || {})})),
+    ...newMeas
+  ];
 }
 
 async function renderMeasuring() {
@@ -4149,6 +4173,60 @@ async function addMissingActsToInventory() {
   }
   showNotif('\u2705 \u0414\u043e\u0434\u0430\u043d\u043e ' + added + ' \u043f\u0430\u0440\u0442\u0456\u0439');
   renderInventory(); loadDashboard();
+}
+
+async function syncActsToToolsRegistry() {
+  const acts = await dbGetAll('acts');
+  const toolCats = new Set(['Інструмент', 'Обладнання']);
+  const measCats = new Set(['Вимірювальний інструмент']);
+  const stored = await dbGetAll('tools_edits');
+  const existingMarkings = new Set(stored.map(e => e.marking).filter(Boolean));
+  const measStored = await dbGetAll('meas_edits');
+  const existingMeasSns = new Set(measStored.map(e => e.sn).filter(Boolean));
+
+  let addedTools = 0, addedMeas = 0;
+
+  for (const a of acts) {
+    if (!a.actNum) continue;
+    if (toolCats.has(a.category) && a.toolMarking && !existingMarkings.has(a.toolMarking)) {
+      await dbAdd('tools_edits', {
+        marking: a.toolMarking, name: a.name, pn: a.pn||'',
+        type: 'Стандартний', actNum: a.actNum,
+        location: 'Warehouse and incoming inspection area',
+        responsible: a.inspector||'', markingStatus: 'Очікує нанесення',
+        num: '', _isNewTool: true, updatedAt: now()
+      });
+      addedTools++;
+    } else if (toolCats.has(a.category) && !a.toolMarking) {
+      // Акт без маркування — генеруємо
+      const marking = await getNextToolMarking();
+      // Оновлюємо акт з маркуванням
+      a.toolMarking = marking;
+      await dbPut('acts', a);
+      await dbAdd('tools_edits', {
+        marking, name: a.name, pn: a.pn||'',
+        type: 'Стандартний', actNum: a.actNum,
+        location: 'Warehouse and incoming inspection area',
+        responsible: a.inspector||'', markingStatus: 'Очікує нанесення',
+        num: '', _isNewTool: true, updatedAt: now()
+      });
+      addedTools++;
+    }
+    if (measCats.has(a.category) && a.measMarking && !existingMeasSns.has(a.measMarking)) {
+      await dbAdd('meas_edits', {
+        sn: a.measMarking, name: a.name, pn: a.pn||'', range: '',
+        location: 'Warehouse and incoming inspection area',
+        period: '12 міс.', lastCal: '', nextCal: '',
+        status: 'Received – Calibration Pending',
+        num: '', _isNewMeas: true, updatedAt: now()
+      });
+      addedMeas++;
+    }
+  }
+  toolsData = null;
+  showNotif(`✅ Додано інструмент: ${addedTools}, вим. інструмент: ${addedMeas}`);
+  renderTools();
+  renderMeasuring();
 }
 
 async function fixJournalPns() {
