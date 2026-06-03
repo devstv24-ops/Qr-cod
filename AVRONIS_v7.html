@@ -3551,9 +3551,32 @@ async function saveAct() {
 
 async function deleteAct(id) {
   if (!confirm('Видалити акт?')) return;
+  const act = await dbGet('acts', id);
+  
+  // Видаляємо з складу
+  if (act && act.actNum) {
+    const inv = await dbGetAll('inventory');
+    for (const i of inv.filter(i => i.actNum === act.actNum)) {
+      await dbDelete('inventory', i.id);
+    }
+    // Видаляємо з реєстру інструментів
+    const toolEdits = await dbGetAll('tools_edits');
+    for (const t of toolEdits.filter(t => t.actNum === act.actNum)) {
+      await dbDelete('tools_edits', t.id);
+    }
+    // Видаляємо з реєстру вимірювального
+    const measEdits = await dbGetAll('meas_edits');
+    for (const m of measEdits.filter(m => m.actNum === act.actNum)) {
+      await dbDelete('meas_edits', m.id);
+    }
+    toolsData = null;
+  }
+
   await dbDelete('acts', id);
   showNotif('Видалено','info');
   renderActs();
+  renderInventory();
+  renderTools();
 }
 
 function printCurrentContent() {
