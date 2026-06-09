@@ -4058,6 +4058,8 @@ function renderTools() {
     if (typeF) filtered = filtered.filter(t => t.type === typeF);
     if (locF) filtered = filtered.filter(t => t.location === locF);
     if (storageF) filtered = filtered.filter(t => t.storagePlace === storageF);
+    // Сортуємо по порядковому номеру
+    filtered.sort((a,b) => (parseInt(a.num)||9999) - (parseInt(b.num)||9999));
 
     const cnt = document.getElementById('tools-count');
     if (cnt) {
