@@ -397,6 +397,10 @@ select option { background: var(--surface2); }
       <span class="nav-icon">📱</span> QR-заявка
     </div>
     <div class="nav-sect">Система</div>
+    <div class="nav-item" onclick="showPage('quarantine')">
+      <span class="nav-icon">🚫</span> Ізолятор браку
+      <span class="nav-badge" id="quarantine-badge" style="display:none">0</span>
+    </div>
     <div class="nav-item" onclick="showPage('backup')">
       <span class="nav-icon">💾</span> Резервне копіювання
     </div>
@@ -703,6 +707,37 @@ select option { background: var(--surface2); }
               <th>Остання повірка</th><th>Наступна повірка</th><th>Статус</th><th>Дії</th>
             </tr></thead>
             <tbody id="meas-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- QUARANTINE -->
+    <div class="page" id="page-quarantine">
+      <div class="card">
+        <div class="card-hdr">
+          <div class="card-title">🚫 Ізолятор браку</div>
+          <div class="btn-group">
+            <button class="btn btn-ghost btn-sm" onclick="exportQuarantineCSV()">📥 Експорт CSV</button>
+          </div>
+        </div>
+        <p style="color:var(--text2);font-size:13px;margin-bottom:16px">
+          Позиції переміщені в ізолятор браку — непридатні до використання. Очікують утилізації або повернення постачальнику.
+        </p>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>PN / Позначення</th>
+              <th>Найменування</th>
+              <th>Категорія</th>
+              <th>К-сть</th>
+              <th>Акт ВК</th>
+              <th>Постачальник</th>
+              <th>Причина браку</th>
+              <th>Дата переміщення</th>
+              <th>Дії</th>
+            </tr></thead>
+            <tbody id="quarantine-tbody"></tbody>
           </table>
         </div>
       </div>
@@ -1342,6 +1377,44 @@ select option { background: var(--surface2); }
   </div>
 </div>
 
+<!-- QUARANTINE MODAL -->
+<div class="modal-overlay" id="modal-quarantine">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-hdr">
+      <div class="modal-title">🚫 Перемістити в ізолятор браку</div>
+      <button class="modal-close" onclick="closeModal('modal-quarantine')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="quarantine-item-info" style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px"></div>
+      <div class="form-group">
+        <label>Причина браку *</label>
+        <select id="quarantine-reason" style="margin-bottom:8px">
+          <option value="">— Оберіть причину —</option>
+          <option>Закінчився термін придатності</option>
+          <option>Механічне пошкодження</option>
+          <option>Невідповідність технічним вимогам</option>
+          <option>Корозія / забруднення</option>
+          <option>Пошкодження при зберіганні</option>
+          <option>Інше</option>
+        </select>
+        <input type="text" id="quarantine-reason-custom" placeholder="Або введіть причину вручну...">
+      </div>
+      <div class="form-group" style="margin-top:12px">
+        <label>Кількість для переміщення</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="number" id="quarantine-qty" min="0.001" step="0.001" style="width:120px">
+          <span id="quarantine-unit" style="color:var(--text2)"></span>
+          <span style="font-size:12px;color:var(--text2)" id="quarantine-max"></span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-quarantine')">Скасувати</button>
+      <button class="btn btn-warn" onclick="confirmQuarantine()">🚫 Перемістити в ізолятор</button>
+    </div>
+  </div>
+</div>
+
 <!-- PRINT DATE MODAL -->
 <div class="modal-overlay" id="modal-print-date">
   <div class="modal" style="max-width:380px">
@@ -1750,6 +1823,152 @@ let db;
 const DB_NAME = 'avronis_v2';
 const DB_VER = 2;
 
+// ===================== QUARANTINE (ІЗОЛЯТОР БРАКУ) =====================
+let _quarantineItemId = null;
+
+async function moveToQuarantine(id) {
+  const item = await dbGet('inventory', id);
+  if (!item) return;
+  _quarantineItemId = id;
+  document.getElementById('quarantine-item-info').innerHTML = `
+    <div><strong>Найменування:</strong> ${item.name}</div>
+    <div><strong>PN:</strong> ${item.pn||'—'}</div>
+    <div><strong>К-сть на складі:</strong> <span style="color:var(--green);font-weight:600">${item.qty} ${item.unit||'шт'}</span></div>
+    ${item.actNum ? `<div><strong>Акт ВК:</strong> ${item.actNum}</div>` : ''}
+  `;
+  document.getElementById('quarantine-qty').value = item.qty;
+  document.getElementById('quarantine-qty').max = item.qty;
+  document.getElementById('quarantine-unit').textContent = item.unit || 'шт';
+  document.getElementById('quarantine-max').textContent = `(макс. ${item.qty} ${item.unit||'шт'})`;
+  document.getElementById('quarantine-reason').value = '';
+  document.getElementById('quarantine-reason-custom').value = '';
+  openModal('modal-quarantine');
+}
+
+async function confirmQuarantine() {
+  if (!_quarantineItemId) return;
+  const reason = document.getElementById('quarantine-reason-custom').value.trim() ||
+                 document.getElementById('quarantine-reason').value;
+  if (!reason) { showNotif('Вкажіть причину браку', 'err'); return; }
+
+  const qty = parseFloat(document.getElementById('quarantine-qty').value) || 0;
+  if (qty <= 0) { showNotif('Вкажіть кількість', 'err'); return; }
+
+  const item = await dbGet('inventory', _quarantineItemId);
+  if (!item) return;
+
+  // Зберігаємо в quarantine store
+  await dbAdd('quarantine', {
+    name: item.name, pn: item.pn||'', sn: item.sn||'',
+    category: item.category||'', qty, unit: item.unit||'шт',
+    actNum: item.actNum||'', supplier: item.supplier||'',
+    reason, movedAt: now(),
+    movedBy: '', sourceInvId: item.id
+  });
+
+  // Списуємо зі складу
+  if (qty >= item.qty) {
+    await dbDelete('inventory', item.id);
+  } else {
+    item.qty = Math.round((item.qty - qty) * 1000) / 1000;
+    item.notes = (item.notes||'') + ` | В ізолятор: ${qty} ${item.unit||'шт'} ${now().slice(0,10)}`;
+    await dbPut('inventory', item);
+  }
+
+  closeModal('modal-quarantine');
+  showNotif(`🚫 ${qty} ${item.unit||'шт'} переміщено в ізолятор браку`);
+  renderInventory();
+  renderQuarantine();
+  updateQuarantineBadge();
+  scheduleBackup();
+}
+
+async function renderQuarantine() {
+  const items = await dbGetAll('quarantine');
+  const tbody = document.getElementById('quarantine-tbody');
+  if (!tbody) return;
+
+  await updateQuarantineBadge();
+
+  if (!items.length) {
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">Ізолятор порожній</div></div></td></tr>`;
+    return;
+  }
+
+  items.sort((a,b) => new Date(b.movedAt) - new Date(a.movedAt));
+  tbody.innerHTML = items.map(i => `<tr>
+    <td class="td-mono" style="font-size:12px">${i.pn||'—'}</td>
+    <td>${i.name}</td>
+    <td><span class="badge badge-grey" style="font-size:11px">${i.category||'—'}</span></td>
+    <td><span class="badge badge-danger">${i.qty} ${i.unit||'шт'}</span></td>
+    <td class="td-mono" style="font-size:11px;color:var(--accent)">${i.actNum||'—'}</td>
+    <td style="font-size:11px;color:var(--text2)">${i.supplier||'—'}</td>
+    <td style="color:var(--orange);font-size:12px">${i.reason||'—'}</td>
+    <td style="font-size:12px">${(i.movedAt||'').slice(0,10)}</td>
+    <td>
+      <div class="btn-group">
+        <button class="btn btn-ghost btn-sm" onclick="restoreFromQuarantine(${i.id})" title="Повернути на склад" style="font-size:11px">↩ Відновити</button>
+        <button class="btn btn-danger btn-icon btn-sm" onclick="deleteQuarantine(${i.id})" title="Видалити назавжди">🗑️</button>
+      </div>
+    </td>
+  </tr>`).join('');
+}
+
+async function updateQuarantineBadge() {
+  const items = await dbGetAll('quarantine');
+  const badge = document.getElementById('quarantine-badge');
+  if (badge) {
+    badge.textContent = items.length;
+    badge.style.display = items.length > 0 ? '' : 'none';
+  }
+}
+
+async function restoreFromQuarantine(id) {
+  if (!confirm('Повернути позицію на склад?')) return;
+  const item = await dbGet('quarantine', id);
+  if (!item) return;
+
+  // Повертаємо на склад
+  const inv = await dbGetAll('inventory');
+  const existing = item.actNum ? inv.find(i => i.actNum === item.actNum) : null;
+  if (existing) {
+    existing.qty = Math.round((existing.qty + item.qty) * 1000) / 1000;
+    await dbPut('inventory', existing);
+  } else {
+    await dbAdd('inventory', {
+      name: item.name, pn: item.pn, sn: item.sn||'',
+      category: item.category, qty: item.qty, minQty: 0,
+      unit: item.unit, location: '', notes: `Відновлено з ізолятора ${now().slice(0,10)}`,
+      createdAt: now().slice(0,10), source: 'quarantine_restore',
+      actNum: item.actNum, supplier: item.supplier
+    });
+  }
+
+  await dbDelete('quarantine', id);
+  showNotif('✅ Позицію повернено на склад');
+  renderInventory();
+  renderQuarantine();
+  updateQuarantineBadge();
+}
+
+async function deleteQuarantine(id) {
+  if (!confirm('Видалити назавжди з ізолятора?')) return;
+  await dbDelete('quarantine', id);
+  showNotif('Видалено', 'info');
+  renderQuarantine();
+  updateQuarantineBadge();
+}
+
+async function exportQuarantineCSV() {
+  const items = await dbGetAll('quarantine');
+  const csv = ['PN,Найменування,Категорія,К-сть,Од,Акт ВК,Постачальник,Причина,Дата переміщення',
+    ...items.map(i => [i.pn,`"${i.name}"`,i.category,i.qty,i.unit,i.actNum,i.supplier,`"${i.reason}"`,i.movedAt?.slice(0,10)].join(','))
+  ].join('\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `quarantine_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+}
+
 function initDB() {
   return new Promise((res, rej) => {
     let req;
@@ -1768,6 +1987,7 @@ function initDB() {
         'acts': () => d.createObjectStore('acts',{keyPath:'id',autoIncrement:true}),
         'tools_edits': () => d.createObjectStore('tools_edits',{keyPath:'id',autoIncrement:true}),
         'meas_edits': () => d.createObjectStore('meas_edits',{keyPath:'id',autoIncrement:true}),
+        'quarantine': () => d.createObjectStore('quarantine',{keyPath:'id',autoIncrement:true}),
       };
       Object.entries(toCreate).forEach(([name, create]) => {
         if (!d.objectStoreNames.contains(name)) create();
@@ -1906,6 +2126,7 @@ function showPage(name) {
   if (name==='measuring') renderMeasuring();
   if (name==='qr') renderQR();
   if (name==='backup') renderBackupStats();
+  if (name==='quarantine') renderQuarantine();
   if (window.innerWidth < 769) document.getElementById('sidebar').classList.remove('open');
 }
 
@@ -2036,6 +2257,7 @@ async function renderInventory() {
       <td>
         <div class="btn-group">
           <button class="btn btn-ghost btn-icon btn-sm" onclick="editItem(${item.id})" title="Редагувати">✏️</button>
+          <button class="btn btn-warn btn-icon btn-sm" onclick="moveToQuarantine(${item.id})" title="В ізолятор браку" style="font-size:13px">🚫</button>
           <button class="btn btn-danger btn-icon btn-sm" onclick="deleteItem(${item.id})" title="Видалити">🗑️</button>
         </div>
       </td>
@@ -2728,11 +2950,6 @@ async function confirmIssue() {
     }
   });
 
-  // Збільшуємо лічильник видач якщо заявка вже була часткова
-  if (req.status === 'partial') {
-    req.partialCount = (req.partialCount || 1) + 1;
-  }
-
   // Списуємо зі складу і пишемо в журнал тільки видані
   for (const it of issuedItems) {
     // Знаходимо запис складу — спочатку по actNum (точне трасування), потім по pn
@@ -2766,7 +2983,7 @@ async function confirmIssue() {
     const sourceSupplier = it._selSupplier || (invItem ? invItem.supplier : '') || '';
 
     // Для часткових видач додаємо суфікс щоб кожна видача була окремою групою
-    const journalReqNum = (req.partialCount && req.partialCount > 0)
+    const journalReqNum = (req.partialCount && req.partialCount > 1)
       ? reqNum(req.id) + '-' + req.partialCount
       : reqNum(req.id);
     await dbAdd('journal', {
@@ -2790,7 +3007,7 @@ async function confirmIssue() {
 
   // Якщо є невидані позиції — залишаємо заявку зі статусом 'partial', оновлюємо items
   if (skippedItems.length > 0) {
-    // partialCount вже збільшено вище
+    req.partialCount = (req.partialCount || 0) + 1; // лічильник часткових видач
     req.items = skippedItems;
     req.status = 'partial';
     req.storekeeper = storekeeper;
@@ -4270,6 +4487,7 @@ async function startApp() {
   if (window.location.hash !== '#mobile-request' && new URLSearchParams(window.location.search).get('mode') !== 'mobile') {
     await preloadDataIfEmpty();
     loadDashboard();
+    updateQuarantineBadge();
     // Автобекап: через 15 сек після старту і кожні 5 хвилин
     setTimeout(() => autoBackupToSheets(), 15000);
     setInterval(() => autoBackupToSheets(), 5 * 60 * 1000);
