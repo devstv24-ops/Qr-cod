@@ -420,6 +420,7 @@ select option { background: var(--surface2); }
     </div>
     <div class="btn-group">
       <button class="btn btn-primary btn-sm" onclick="openNewRequestModal()">＋ Заявка</button>
+      <button class="btn btn-ghost btn-sm" onclick="manualSync()" title="Синхронізувати зараз" id="sync-now-btn">🔄</button>
       <button class="btn btn-ghost btn-sm" onclick="showPage('backup')">💾</button>
     </div>
   </div>
@@ -4488,9 +4489,16 @@ async function startApp() {
     await preloadDataIfEmpty();
     loadDashboard();
     updateQuarantineBadge();
-    // Автобекап: через 15 сек після старту і кожні 5 хвилин
-    setTimeout(() => autoBackupToSheets(), 15000);
-    setInterval(() => autoBackupToSheets(), 5 * 60 * 1000);
+    // При старті — підтягуємо дані з Sheets якщо є новіші (синхронізація між користувачами)
+    showSyncStatus('syncing');
+    await pullFromSheets();
+
+    // Автобекап: через 10 сек після старту і кожні 2 хвилини
+    setTimeout(() => autoBackupToSheets(), 10000);
+    setInterval(() => autoBackupToSheets(), 2 * 60 * 1000);
+
+    // Підтягуємо зміни від іншого користувача кожні 30 секунд
+    setInterval(() => pullFromSheets(), 30 * 1000);
     setInterval(async () => {
       try {
         const resp = await fetch(GAS_URL+'?action=getRequests',{method:'GET',redirect:'follow'});
@@ -4658,6 +4666,9 @@ async function fixJournalPns() {
 }
 
 // ── АВТОБЕКАП В GOOGLE SHEETS ──────────────────────────────────────────────
+// ── СИНХРОНІЗАЦІЯ З GOOGLE SHEETS (спільна база) ──────────────────────────
+let _syncInProgress = false;
+
 async function autoBackupToSheets() {
   try {
     const inv = await dbGetAll('inventory');
@@ -4666,12 +4677,14 @@ async function autoBackupToSheets() {
     const requests = await dbGetAll('requests');
     const tools_edits = await dbGetAll('tools_edits');
     const meas_edits = await dbGetAll('meas_edits');
+    const quarantine = await dbGetAll('quarantine').catch(()=>[]);
     if (!inv.length && !acts.length) return;
 
+    const exportedAt = now();
     const payload = {
       action: 'saveBackup',
-      inventory: inv, journal, acts, requests, tools_edits, meas_edits,
-      exportedAt: now()
+      inventory: inv, journal, acts, requests, tools_edits, meas_edits, quarantine,
+      exportedAt
     };
 
     await fetch(GAS_URL, {
@@ -4681,11 +4694,108 @@ async function autoBackupToSheets() {
       body: JSON.stringify(payload)
     });
 
-    localStorage.setItem('lastBackup', now());
+    localStorage.setItem('lastBackup', exportedAt);
+    localStorage.setItem('lastSyncAt', exportedAt);
     const el = document.getElementById('backup-status');
-    if (el) el.textContent = '✅ Бекап: ' + new Date().toLocaleTimeString('uk-UA');
+    if (el) el.textContent = '✅ Синхронізовано: ' + new Date().toLocaleTimeString('uk-UA');
+    showSyncStatus('ok');
   } catch(e) {
     console.warn('Автобекап не вдався:', e.message);
+    showSyncStatus('err');
+  }
+}
+
+function showSyncStatus(status) {
+  const ind = document.getElementById('save-indicator');
+  const txt = document.getElementById('save-text');
+  if (!ind) return;
+  if (status === 'ok') {
+    ind.style.display = 'flex';
+    ind.style.background = 'rgba(46,204,113,0.15)';
+    ind.style.color = '#2ecc71';
+    ind.style.borderColor = 'rgba(46,204,113,0.3)';
+    ind.querySelector('span').textContent = '☁️';
+    txt.textContent = 'Синхронізовано';
+    setTimeout(() => { ind.style.display = 'none'; }, 4000);
+  } else if (status === 'syncing') {
+    ind.style.display = 'flex';
+    ind.style.background = 'rgba(61,142,240,0.15)';
+    ind.style.color = '#3d8ef0';
+    ind.style.borderColor = 'rgba(61,142,240,0.3)';
+    ind.querySelector('span').textContent = '🔄';
+    txt.textContent = 'Синхронізація...';
+  } else {
+    ind.style.display = 'flex';
+    ind.style.background = 'rgba(243,156,18,0.15)';
+    ind.style.color = '#f39c12';
+    ind.style.borderColor = 'rgba(243,156,18,0.3)';
+    ind.querySelector('span').textContent = '⚠️';
+    txt.textContent = 'Офлайн — дані локальні';
+    setTimeout(() => { ind.style.display = 'none'; }, 5000);
+  }
+}
+
+// Підтягуємо дані з Sheets якщо вони новіші (для синхронізації між користувачами)
+async function manualSync() {
+  const btn = document.getElementById('sync-now-btn');
+  if (btn) btn.textContent = '⏳';
+  showSyncStatus('syncing');
+  await pullFromSheets();
+  await autoBackupToSheets();
+  if (btn) btn.textContent = '🔄';
+  showNotif('✅ Синхронізовано з хмарою');
+}
+
+async function pullFromSheets() {
+  if (_syncInProgress) return;
+  _syncInProgress = true;
+  try {
+    const resp = await fetch(GAS_URL + '?action=getBackup', {method:'GET', redirect:'follow'});
+    if (!resp.ok) throw new Error('no response');
+    const data = await resp.json();
+    if (!data || !data.exportedAt) throw new Error('no data');
+
+    const localSyncAt = localStorage.getItem('lastSyncAt') || '';
+    const sheetsAt = data.exportedAt || '';
+
+    // Якщо Sheets новіший — підтягуємо
+    if (sheetsAt > localSyncAt && data.inventory?.length) {
+      const restoreStore = async (storeName, items) => {
+        if (!items?.length) return;
+        // Захист: не перезаписуємо якщо прийшов порожній масив
+        if (items.length === 0) return;
+        const tx = db.transaction(storeName,'readwrite');
+        const s = tx.objectStore(storeName);
+        s.clear();
+        items.forEach(item => { const c={...item}; delete c.id; s.add(c); });
+        await new Promise(r=>tx.oncomplete=r);
+      };
+
+      await restoreStore('inventory',   data.inventory   || []);
+      await restoreStore('journal',     data.journal     || []);
+      await restoreStore('acts',        data.acts        || []);
+      await restoreStore('requests',    data.requests    || []);
+      await restoreStore('tools_edits', data.tools_edits || []);
+      await restoreStore('meas_edits',  data.meas_edits  || []);
+      if (data.quarantine?.length) await restoreStore('quarantine', data.quarantine);
+
+      localStorage.setItem('lastSyncAt', sheetsAt);
+
+      // Оновлюємо UI без перезавантаження
+      toolsData = null;
+      renderInventory();
+      renderRequests();
+      loadDashboard();
+      updateQuarantineBadge();
+
+      const el = document.getElementById('backup-status');
+      if (el) el.textContent = '🔄 Синхронізовано з хмарою: ' + new Date().toLocaleTimeString('uk-UA');
+      console.log('✅ Дані підтягнуто з Sheets:', sheetsAt);
+    }
+  } catch(e) {
+    console.warn('pullFromSheets error:', e.message);
+  } finally {
+    _syncInProgress = false;
   }
 }
 
