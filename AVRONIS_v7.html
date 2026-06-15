@@ -2728,6 +2728,11 @@ async function confirmIssue() {
     }
   });
 
+  // Збільшуємо лічильник видач якщо заявка вже була часткова
+  if (req.status === 'partial') {
+    req.partialCount = (req.partialCount || 1) + 1;
+  }
+
   // Списуємо зі складу і пишемо в журнал тільки видані
   for (const it of issuedItems) {
     // Знаходимо запис складу — спочатку по actNum (точне трасування), потім по pn
@@ -2761,7 +2766,7 @@ async function confirmIssue() {
     const sourceSupplier = it._selSupplier || (invItem ? invItem.supplier : '') || '';
 
     // Для часткових видач додаємо суфікс щоб кожна видача була окремою групою
-    const journalReqNum = (req.partialCount && req.partialCount > 1)
+    const journalReqNum = (req.partialCount && req.partialCount > 0)
       ? reqNum(req.id) + '-' + req.partialCount
       : reqNum(req.id);
     await dbAdd('journal', {
@@ -2785,7 +2790,7 @@ async function confirmIssue() {
 
   // Якщо є невидані позиції — залишаємо заявку зі статусом 'partial', оновлюємо items
   if (skippedItems.length > 0) {
-    req.partialCount = (req.partialCount || 0) + 1; // лічильник часткових видач
+    // partialCount вже збільшено вище
     req.items = skippedItems;
     req.status = 'partial';
     req.storekeeper = storekeeper;
