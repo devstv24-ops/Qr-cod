@@ -4489,16 +4489,10 @@ async function startApp() {
     await preloadDataIfEmpty();
     loadDashboard();
     updateQuarantineBadge();
-    // При старті — підтягуємо дані з Sheets якщо є новіші (синхронізація між користувачами)
-    showSyncStatus('syncing');
-    await pullFromSheets();
 
-    // Автобекап: через 10 сек після старту і кожні 2 хвилини
+    // Автобекап: через 10 сек після старту і кожні 2 хвилини (тільки запис в Sheets, НЕ читання)
     setTimeout(() => autoBackupToSheets(), 10000);
     setInterval(() => autoBackupToSheets(), 2 * 60 * 1000);
-
-    // Підтягуємо зміни від іншого користувача кожні 30 секунд
-    setInterval(() => pullFromSheets(), 30 * 1000);
     setInterval(async () => {
       try {
         const resp = await fetch(GAS_URL+'?action=getRequests',{method:'GET',redirect:'follow'});
@@ -4755,6 +4749,21 @@ async function pullFromSheets() {
     const data = await resp.json();
     if (!data || !data.exportedAt) throw new Error('no data');
 
+    // ЗАХИСТ: не підтягуємо якщо в Sheets менше даних ніж локально
+    const localInv = await dbGetAll('inventory');
+    const localJournal = await dbGetAll('journal');
+    const sheetsInvCount = (data.inventory||[]).filter(i=>i.name).length;
+    const sheetsJournalCount = (data.journal||[]).filter(j=>j.name||j.pn).length;
+
+    if (sheetsInvCount < localInv.filter(i=>i.name).length * 0.5) {
+      console.warn('pullFromSheets: Sheets має менше даних ніж локально — пропускаємо');
+      return;
+    }
+    if (sheetsJournalCount < localJournal.filter(j=>j.name||j.pn).length * 0.5) {
+      console.warn('pullFromSheets: Sheets журнал має менше даних — пропускаємо');
+      return;
+    }
+
     const localSyncAt = localStorage.getItem('lastSyncAt') || '';
     const sheetsAt = data.exportedAt || '';
 
@@ -4762,12 +4771,13 @@ async function pullFromSheets() {
     if (sheetsAt > localSyncAt && data.inventory?.length) {
       const restoreStore = async (storeName, items) => {
         if (!items?.length) return;
-        // Захист: не перезаписуємо якщо прийшов порожній масив
-        if (items.length === 0) return;
+        // ЗАХИСТ: ніколи не перезаписуємо порожніми даними
+        const realItems = items.filter(i => i.name || i.pn || i.actNum || i.reqNum || i.marking || i.sn);
+        if (realItems.length === 0) return;
         const tx = db.transaction(storeName,'readwrite');
         const s = tx.objectStore(storeName);
         s.clear();
-        items.forEach(item => { const c={...item}; delete c.id; s.add(c); });
+        realItems.forEach(item => { const c={...item}; delete c.id; s.add(c); });
         await new Promise(r=>tx.oncomplete=r);
       };
 
