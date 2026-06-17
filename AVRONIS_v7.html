@@ -513,11 +513,11 @@ select option { background: var(--surface2); }
         </div>
       </div>
       <div class="tabs">
-        <button class="tab-btn" onclick="filterRequests('new',this)">🔵 Нові</button>
+        <button class="tab-btn active" onclick="filterRequests('new',this)">🔵 Нові</button>
         <button class="tab-btn" onclick="filterRequests('processing',this)">🟡 В роботі</button>
         <button class="tab-btn" onclick="filterRequests('partial',this)">🟠 Частково</button>
         <button class="tab-btn" onclick="filterRequests('done',this)">🟢 Виконані</button>
-        <button class="tab-btn active" onclick="filterRequests('all',this)">Всі</button>
+        <button class="tab-btn" onclick="filterRequests('all',this)">Всі</button>
       </div>
       <div id="requests-list"></div>
     </div>
@@ -2060,7 +2060,7 @@ function dbClear(store) {
 // ===================== STATE =====================
 let currentReqStep = 'main';
 let tempRequestItems = [];
-let currentReqFilter = 'all';
+let currentReqFilter = 'new';
 let pendingIssueReqId = null;
 
 // ===================== UTILS =====================
@@ -2416,11 +2416,11 @@ async function renderRequests() {
         <span class="badge ${r.status==='new'?'badge-info':r.status==='processing'?'badge-warn':r.status==='partial'?'badge-warn':'badge-ok'}">${r.status==='new'?'🔵 Нова':r.status==='processing'?'🟡 В роботі':r.status==='partial'?'🟠 Частково':'🟢 Виконана'}</span>
       </div>
       <div class="req-parts">
-        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Позиції (${r.items.length}):</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Позиції (${(r.items||[]).length}):</div>
         <div style="max-height:160px;overflow-y:auto">
-        ${r.items.map((it,i)=>`
+        ${(r.items||[]).map((it,i)=>`
           <div class="req-part-row">
-            <span>${i+1}. ${it.name}${it.pn?' <span class="td-mono" style="color:var(--text2)">['+it.pn+']</span>':''}</span>
+            <span>${i+1}. ${it.name||''}${it.pn?' <span class="td-mono" style="color:var(--text2)">['+it.pn+']</span>':''}</span>
             <span style="font-weight:600">${it.qty} ${it.unit||'шт'}</span>
           </div>`).join('')}
         </div>
@@ -3454,7 +3454,7 @@ async function renderActs() {
   }
   tbody.innerHTML = filtered.map(a=>`<tr>
     <td class="td-mono" style="color:var(--accent)">${a.actNum||actNum(a.id)}</td>
-    <td style="font-size:12px">${a.date||'—'}</td>
+    <td style="font-size:12px">${fmtDateOnly(a.date)||a.date||'—'}</td>
     <td><span class="badge badge-grey" style="font-size:10px">${a.category||'—'}</span></td>
     <td>${a.name}</td>
     <td class="td-mono" style="font-size:11px">${a.pn||'—'}</td>
