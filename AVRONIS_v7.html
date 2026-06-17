@@ -513,11 +513,11 @@ select option { background: var(--surface2); }
         </div>
       </div>
       <div class="tabs">
-        <button class="tab-btn active" onclick="filterRequests('new',this)">🔵 Нові</button>
+        <button class="tab-btn" onclick="filterRequests('new',this)">🔵 Нові</button>
         <button class="tab-btn" onclick="filterRequests('processing',this)">🟡 В роботі</button>
         <button class="tab-btn" onclick="filterRequests('partial',this)">🟠 Частково</button>
         <button class="tab-btn" onclick="filterRequests('done',this)">🟢 Виконані</button>
-        <button class="tab-btn" onclick="filterRequests('all',this)">Всі</button>
+        <button class="tab-btn active" onclick="filterRequests('all',this)">Всі</button>
       </div>
       <div id="requests-list"></div>
     </div>
@@ -2060,7 +2060,7 @@ function dbClear(store) {
 // ===================== STATE =====================
 let currentReqStep = 'main';
 let tempRequestItems = [];
-let currentReqFilter = 'new';
+let currentReqFilter = 'all';
 let pendingIssueReqId = null;
 
 // ===================== UTILS =====================
@@ -2217,9 +2217,9 @@ async function renderInventory() {
 
   // Сортуємо: категорія → pn → actNum
   filtered.sort((a,b)=>
-    (a.category||'').localeCompare(b.category||'') ||
-    (a.pn||'').localeCompare(b.pn||'') ||
-    (a.actNum||'').localeCompare(b.actNum||'')
+    String(a.category||'').localeCompare(String(b.category||'')) ||
+    String(a.pn||'').localeCompare(String(b.pn||'')) ||
+    String(a.actNum||'').localeCompare(String(b.actNum||''))
   );
 
   const tbody = document.getElementById('inv-tbody');
