@@ -2217,9 +2217,9 @@ async function renderInventory() {
 
   // Сортуємо: категорія → pn → actNum
   filtered.sort((a,b)=>
-    String(a.category||'').localeCompare(String(b.category||'')) ||
-    String(a.pn||'').localeCompare(String(b.pn||'')) ||
-    String(a.actNum||'').localeCompare(String(b.actNum||''))
+    (a.category||'').localeCompare(b.category||'') ||
+    (a.pn||'').localeCompare(b.pn||'') ||
+    (a.actNum||'').localeCompare(b.actNum||'')
   );
 
   const tbody = document.getElementById('inv-tbody');
@@ -2416,11 +2416,11 @@ async function renderRequests() {
         <span class="badge ${r.status==='new'?'badge-info':r.status==='processing'?'badge-warn':r.status==='partial'?'badge-warn':'badge-ok'}">${r.status==='new'?'🔵 Нова':r.status==='processing'?'🟡 В роботі':r.status==='partial'?'🟠 Частково':'🟢 Виконана'}</span>
       </div>
       <div class="req-parts">
-        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Позиції (${(r.items||[]).length}):</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Позиції (${r.items.length}):</div>
         <div style="max-height:160px;overflow-y:auto">
-        ${(r.items||[]).map((it,i)=>`
+        ${r.items.map((it,i)=>`
           <div class="req-part-row">
-            <span>${i+1}. ${it.name||''}${it.pn?' <span class="td-mono" style="color:var(--text2)">['+it.pn+']</span>':''}</span>
+            <span>${i+1}. ${it.name}${it.pn?' <span class="td-mono" style="color:var(--text2)">['+it.pn+']</span>':''}</span>
             <span style="font-weight:600">${it.qty} ${it.unit||'шт'}</span>
           </div>`).join('')}
         </div>
@@ -3454,7 +3454,7 @@ async function renderActs() {
   }
   tbody.innerHTML = filtered.map(a=>`<tr>
     <td class="td-mono" style="color:var(--accent)">${a.actNum||actNum(a.id)}</td>
-    <td style="font-size:12px">${fmtDateOnly(a.date)||a.date||'—'}</td>
+    <td style="font-size:12px">${a.date||'—'}</td>
     <td><span class="badge badge-grey" style="font-size:10px">${a.category||'—'}</span></td>
     <td>${a.name}</td>
     <td class="td-mono" style="font-size:11px">${a.pn||'—'}</td>
@@ -4385,10 +4385,11 @@ async function renderMeasuring() {
   let filtered = allMeas.map(m => {
     let statusClass = 'badge-grey';
     let statusLabel = m.status || '—';
-    if (!m.nextCal) {
+    const nextCalClean = (m.nextCal||'').slice(0,10);
+    if (!nextCalClean) {
       statusClass = 'badge-warn'; statusLabel = '⏳ Очікує повірки';
     } else {
-      const next = new Date(m.nextCal);
+      const next = new Date(nextCalClean + 'T12:00:00');
       if (next < today) { statusClass = 'badge-danger'; statusLabel = '❌ Прострочено'; }
       else if (next < soon) { statusClass = 'badge-warn'; statusLabel = '⚠️ Скоро'; }
       else { statusClass = 'badge-ok'; statusLabel = '✅ Придатний'; }
@@ -4424,8 +4425,8 @@ async function renderMeasuring() {
     <td style="font-size:12px">${m.range||'—'}</td>
     <td style="font-size:11px;color:var(--text2)">${m.location||'—'}</td>
     <td style="font-size:11px;color:var(--text2)">${m.storagePlace||'—'}</td>
-    <td style="font-size:12px">${m.lastCal||'—'}</td>
-    <td style="font-size:12px;font-weight:${m.statusClass==='badge-danger'?'700':'400'};color:${m.statusClass==='badge-danger'?'var(--red)':m.statusClass==='badge-warn'?'var(--orange)':'inherit'}">${m.nextCal||'—'}</td>
+    <td style="font-size:12px">${(m.lastCal||'').slice(0,10)||'—'}</td>
+    <td style="font-size:12px;font-weight:${m.statusClass==='badge-danger'?'700':'400'};color:${m.statusClass==='badge-danger'?'var(--red)':m.statusClass==='badge-warn'?'var(--orange)':'inherit'}">${(m.nextCal||'').slice(0,10)||'—'}</td>
     <td><span class="badge ${m.statusClass}">${m.statusLabel}</span></td>
     <td><button class="btn btn-ghost btn-icon btn-sm" onclick="openMeasEdit('${(m.sn||'').replace(/'/g,'')}')" title="Редагувати">✏️</button></td>
   </tr>`).join('');
@@ -4443,8 +4444,8 @@ async function openMeasEdit(sn) {
   // Editable fields
   document.getElementById('meas-edit-location').value = m.location || '';
   document.getElementById('meas-edit-storage-place').value = m.storagePlace || '';
-  document.getElementById('meas-edit-last-cal').value = m.lastCal || '';
-  document.getElementById('meas-edit-next-cal').value = m.nextCal || '';
+  document.getElementById('meas-edit-last-cal').value = (m.lastCal||'').slice(0,10) || '';
+  document.getElementById('meas-edit-next-cal').value = (m.nextCal||'').slice(0,10) || '';
   openModal('modal-meas-edit');
 }
 
@@ -4489,10 +4490,16 @@ async function startApp() {
     await preloadDataIfEmpty();
     loadDashboard();
     updateQuarantineBadge();
+    // При старті — підтягуємо дані з Sheets якщо є новіші (синхронізація між користувачами)
+    showSyncStatus('syncing');
+    await pullFromSheets();
 
-    // Автобекап: через 10 сек після старту і кожні 2 хвилини (тільки запис в Sheets, НЕ читання)
+    // Автобекап: через 10 сек після старту і кожні 2 хвилини
     setTimeout(() => autoBackupToSheets(), 10000);
     setInterval(() => autoBackupToSheets(), 2 * 60 * 1000);
+
+    // Підтягуємо зміни від іншого користувача кожні 30 секунд
+    setInterval(() => pullFromSheets(), 30 * 1000);
     setInterval(async () => {
       try {
         const resp = await fetch(GAS_URL+'?action=getRequests',{method:'GET',redirect:'follow'});
@@ -4749,21 +4756,6 @@ async function pullFromSheets() {
     const data = await resp.json();
     if (!data || !data.exportedAt) throw new Error('no data');
 
-    // ЗАХИСТ: не підтягуємо якщо в Sheets менше даних ніж локально
-    const localInv = await dbGetAll('inventory');
-    const localJournal = await dbGetAll('journal');
-    const sheetsInvCount = (data.inventory||[]).filter(i=>i.name).length;
-    const sheetsJournalCount = (data.journal||[]).filter(j=>j.name||j.pn).length;
-
-    if (sheetsInvCount < localInv.filter(i=>i.name).length * 0.5) {
-      console.warn('pullFromSheets: Sheets має менше даних ніж локально — пропускаємо');
-      return;
-    }
-    if (sheetsJournalCount < localJournal.filter(j=>j.name||j.pn).length * 0.5) {
-      console.warn('pullFromSheets: Sheets журнал має менше даних — пропускаємо');
-      return;
-    }
-
     const localSyncAt = localStorage.getItem('lastSyncAt') || '';
     const sheetsAt = data.exportedAt || '';
 
@@ -4771,13 +4763,12 @@ async function pullFromSheets() {
     if (sheetsAt > localSyncAt && data.inventory?.length) {
       const restoreStore = async (storeName, items) => {
         if (!items?.length) return;
-        // ЗАХИСТ: ніколи не перезаписуємо порожніми даними
-        const realItems = items.filter(i => i.name || i.pn || i.actNum || i.reqNum || i.marking || i.sn);
-        if (realItems.length === 0) return;
+        // Захист: не перезаписуємо якщо прийшов порожній масив
+        if (items.length === 0) return;
         const tx = db.transaction(storeName,'readwrite');
         const s = tx.objectStore(storeName);
         s.clear();
-        realItems.forEach(item => { const c={...item}; delete c.id; s.add(c); });
+        items.forEach(item => { const c={...item}; delete c.id; s.add(c); });
         await new Promise(r=>tx.oncomplete=r);
       };
 
