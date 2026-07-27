@@ -3459,7 +3459,7 @@ async function renderActs() {
   }
   tbody.innerHTML = filtered.map(a=>`<tr>
     <td class="td-mono" style="color:var(--accent)">${a.actNum||actNum(a.id)}</td>
-    <td style="font-size:12px">${a.date||'—'}</td>
+    <td style="font-size:12px">${(a.date||'—').slice(0,10)}</td>
     <td><span class="badge badge-grey" style="font-size:10px">${a.category||'—'}</span></td>
     <td>${a.name}</td>
     <td class="td-mono" style="font-size:11px">${a.pn||'—'}</td>
@@ -3628,7 +3628,7 @@ async function editAct(id) {
   document.getElementById('act-modal-title').textContent = 'Редагувати акт';
   document.getElementById('act-edit-id').value = id;
   document.getElementById('act-num').value = a.actNum||'';
-  document.getElementById('act-date').value = a.date||'';
+  document.getElementById('act-date').value = (a.date||'').slice(0,10);
   document.getElementById('act-name').value = a.name||'';
   document.getElementById('act-category').value = a.category||'';
   document.getElementById('act-pn').value = a.pn||'';
@@ -4493,6 +4493,21 @@ async function startApp() {
   checkHash();
   if (window.location.hash !== '#mobile-request' && new URLSearchParams(window.location.search).get('mode') !== 'mobile') {
     await preloadDataIfEmpty();
+    // Автовиправлення ISO дат при кожному старті
+    await (async()=>{
+      try {
+        const acts = await dbGetAll('acts');
+        const needFix = acts.filter(a=>a.date&&a.date.length>10);
+        for(const a of needFix){ a.date=a.date.slice(0,10); await dbPut('acts',a); }
+        const meas = await dbGetAll('meas_edits');
+        for(const m of meas){
+          let ch=false;
+          if(m.lastCal&&m.lastCal.length>10){m.lastCal=m.lastCal.slice(0,10);ch=true;}
+          if(m.nextCal&&m.nextCal.length>10){m.nextCal=m.nextCal.slice(0,10);ch=true;}
+          if(ch) await dbPut('meas_edits',m);
+        }
+      } catch(e){}
+    })();
     loadDashboard();
     updateQuarantineBadge();
     // При старті — підтягуємо дані з Sheets якщо є новіші (синхронізація між користувачами)
@@ -4766,6 +4781,7 @@ async function pullFromSheets() {
 
     // Якщо Sheets новіший — підтягуємо
     if (sheetsAt > localSyncAt && data.inventory?.length) {
+      const fixDate = d => (d && String(d).length > 10) ? String(d).slice(0,10) : (d||'');
       const restoreStore = async (storeName, items) => {
         if (!items?.length) return;
         // Захист: не перезаписуємо якщо прийшов порожній масив
@@ -4773,7 +4789,14 @@ async function pullFromSheets() {
         const tx = db.transaction(storeName,'readwrite');
         const s = tx.objectStore(storeName);
         s.clear();
-        items.forEach(item => { const c={...item}; delete c.id; s.add(c); });
+        items.forEach(item => {
+          const c={...item}; delete c.id;
+          if(c.date) c.date=fixDate(c.date);
+          if(c.actDate) c.actDate=fixDate(c.actDate);
+          if(c.lastCal) c.lastCal=fixDate(c.lastCal);
+          if(c.nextCal) c.nextCal=fixDate(c.nextCal);
+          s.add(c);
+        });
         await new Promise(r=>tx.oncomplete=r);
       };
 
@@ -4811,12 +4834,20 @@ async function restoreFromSheets() {
     const resp = await fetch(GAS_URL + '?action=getBackup');
     const data = await resp.json();
 
+    const fixDate2 = d => (d && String(d).length > 10) ? String(d).slice(0,10) : (d||'');
     const restoreStore = async (storeName, items) => {
       if (!items?.length) return 0;
       const tx = db.transaction(storeName,'readwrite');
       const s = tx.objectStore(storeName);
       s.clear();
-      items.forEach(item => { const c={...item}; delete c.id; s.add(c); });
+      items.forEach(item => {
+        const c={...item}; delete c.id;
+        if(c.date) c.date=fixDate2(c.date);
+        if(c.actDate) c.actDate=fixDate2(c.actDate);
+        if(c.lastCal) c.lastCal=fixDate2(c.lastCal);
+        if(c.nextCal) c.nextCal=fixDate2(c.nextCal);
+        s.add(c);
+      });
       await new Promise(r=>tx.oncomplete=r);
       return items.length;
     };
