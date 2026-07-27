@@ -1916,12 +1916,14 @@ async function renderQuarantine() {
 }
 
 async function updateQuarantineBadge() {
-  const items = await dbGetAll('quarantine');
-  const badge = document.getElementById('quarantine-badge');
-  if (badge) {
-    badge.textContent = items.length;
-    badge.style.display = items.length > 0 ? '' : 'none';
-  }
+  try {
+    const items = await dbGetAll('quarantine');
+    const badge = document.getElementById('quarantine-badge');
+    if (badge) {
+      badge.textContent = items.length;
+      badge.style.display = items.length > 0 ? '' : 'none';
+    }
+  } catch(e) {}
 }
 
 async function restoreFromQuarantine(id) {
@@ -2010,10 +2012,13 @@ function scheduleBackup() {
 
 function dbGetAll(store) {
   return new Promise((res,rej)=>{
-    const tx = db.transaction(store,'readonly');
-    const req = tx.objectStore(store).getAll();
-    req.onsuccess = ()=>res(req.result);
-    req.onerror = ()=>rej(req.error);
+    try {
+      if (!db.objectStoreNames.contains(store)) { res([]); return; }
+      const tx = db.transaction(store,'readonly');
+      const req = tx.objectStore(store).getAll();
+      req.onsuccess = ()=>res(req.result);
+      req.onerror = ()=>rej(req.error);
+    } catch(e) { res([]); }
   });
 }
 function dbGet(store,id) {
