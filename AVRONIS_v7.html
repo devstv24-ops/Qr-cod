@@ -4481,7 +4481,51 @@ function saveTagEdit() {
 function printTags() {
   const active = tagData.filter(Boolean);
   if (!active.length) { showNotif('Оберіть хоча б один акт', 'err'); return; }
-  window.print();
+
+  const cols = active.length <= 2 ? active.length : 2;
+  const tagHtml = active.map(t => renderTagCard(t, 0).replace(/<button[^>]*no-print[^>]*>.*?<\/button>/g, '')).join('');
+
+  const win = window.open('', '_blank', 'width=900,height=700');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Бірки AMO-CiV-F.0018</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #fff; color: #000; }
+  .tags-grid {
+    display: grid;
+    grid-template-columns: repeat(${cols}, 1fr);
+    gap: 12px;
+    padding: 12px;
+  }
+  .tag-card { border: 2px solid #000; background: #fff; }
+  .tag-header { display: grid; grid-template-columns: 1fr 2fr 80px; border-bottom: 2px solid #000; }
+  .tag-header-cell {
+    padding: 10px 8px; display: flex; align-items: center; justify-content: center;
+    text-align: center; font-weight: 700; font-size: 13px; line-height: 1.3;
+  }
+  .tag-header-cell:not(:last-child) { border-right: 2px solid #000; }
+  .tag-header-cell.green { background: #4CAF50; color: #fff; flex-direction: column; }
+  .green-label { font-size: 11px; font-weight: 400; font-style: italic; }
+  .tag-row { display: grid; grid-template-columns: 180px 1fr; border-bottom: 1px solid #000; min-height: 32px; }
+  .tag-row:last-of-type { border-bottom: none; }
+  .tag-label {
+    padding: 5px 8px; border-right: 2px solid #000; font-size: 11px;
+    font-weight: 700; line-height: 1.3; display: flex; flex-direction: column; justify-content: center;
+  }
+  .tag-label span { font-weight: 400; font-style: italic; }
+  .tag-value { padding: 5px 8px; font-size: 12px; display: flex; align-items: center; }
+  .tag-footer { padding: 5px 8px; font-size: 10px; font-weight: 700; border-top: 2px solid #000; }
+  .tag-footer span { font-weight: 400; font-style: italic; }
+  @media print {
+    body { margin: 0; }
+    .tags-grid { padding: 8px; gap: 8px; }
+    .tag-header-cell.green { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #4CAF50 !important; color: #fff !important; }
+  }
+</style></head><body>
+<div class="tags-grid">${tagHtml}</div>
+<script>window.onload=function(){ window.print(); }<\/script>
+</body></html>`);
+  win.document.close();
 }
 
 // ===================== BACKUP =====================
