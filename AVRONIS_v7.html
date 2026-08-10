@@ -4575,7 +4575,6 @@ function saveTagEdit() {
 }
 
 function printTags() {
-  // Якщо режим журналу і є більше 4 позицій — друкуємо всі по 4
   let allItems = [];
   if (tagMode === 'req' && tagJournalItems.length > 0) {
     allItems = tagJournalItems.map(j => ({
@@ -4592,138 +4591,91 @@ function printTags() {
   } else {
     allItems = tagData.filter(Boolean);
   }
+  if (!allItems.length) { showNotif('Оберіть хоча б одну позицію', 'err'); return; }
 
-  const active = allItems;
-  if (!active.length) { showNotif('Оберіть хоча б одну позицію', 'err'); return; }
-
-  const cols = 2;
-  // Розбиваємо на групи по 4 — кожна група = один аркуш
+  // Розбиваємо на групи по 4
   const pages = [];
-  for (let i = 0; i < active.length; i += 4) {
-    pages.push(active.slice(i, i + 4));
-  }
-  // Лицева сторона: всі аркуші
-  const frontHtml = pages.map(page =>
-    `<div class="tags-grid">${page.map(t => renderTagCard(t, 0).replace(/<button[^>]*class="[^"]*no-print[^"]*"[^>]*>.*?<\/button>/gs, '')).join('')}</div><div class="page-break"></div>`
-  ).join('');
-  // Зворотня сторона: всі аркуші
-  const backCardHtmlLocal = `<div class="tag-card" style="display:flex;flex-direction:column;">
-    <div class="tag-header">
-      <div class="tag-header-cell">«AVRONIS FZE»</div>
-      <div class="tag-header-cell">«SERVICEABLE/FIT FOR USE»<br><span style="font-weight:400;font-style:italic;font-size:8px">(«СПРАВНИЙ/ПРИДАТНИЙ»)</span></div>
-      <div class="tag-header-cell green"><div>GREEN</div><div class="green-label">(зелений)</div></div>
-    </div>
-    <div style="flex:1;padding:6px 8px;display:flex;flex-direction:column;">
-      <div style="font-size:9px;font-weight:700;margin-bottom:4px">Additional information:<br><span style="font-weight:400;font-style:italic">(Додаткова інформація)</span></div>
-      <div style="flex:1;border:1px solid #000;margin-top:4px;min-height:160px"></div>
-    </div>
-  </div>`;
-  const backHtml = pages.map(page =>
-    `<div class="tags-grid">${Array(page.length).fill(backCardHtmlLocal).join('')}</div><div class="page-break"></div>`
-  ).join('');
-  const tagHtml = frontHtml + backHtml;
+  for (let i = 0; i < allItems.length; i += 4) pages.push(allItems.slice(i, i + 4));
 
-  // Зворотня сторона — однакова для всіх бірок
+  // Генеруємо HTML для однієї бірки
+  function tagCardHtml(t) {
+    return '<div class="tag-card">' +
+      '<div class="tag-header">' +
+        '<div class="tag-header-cell">\xABAVRONIS FZE\xBB</div>' +
+        '<div class="tag-header-cell">\xABSERVICEABLE/FIT FOR USE\xBB<br><span style="font-weight:400;font-style:italic;font-size:8px">(\xAB\u0421\u041F\u0420\u0410\u0412\u041D\u0418\u0419/\u041F\u0420\u0418\u0414\u0410\u0422\u041D\u0418\u0419\xBB)</span></div>' +
+        '<div class="tag-header-cell green"><div>GREEN</div><div class="green-label">(\u0437\u0435\u043B\u0435\u043D\u0438\u0439)</div></div>' +
+      '</div>' +
+      '<div class="tag-row"><div class="tag-label"><b>Item Name</b><span>(\u041D\u0430\u0439\u043C\u0435\u043D\u0443\u0432\u0430\u043D\u043D\u044F)</span></div><div class="tag-value">' + (t.name||'') + '</div></div>' +
+      '<div class="tag-row"><div class="tag-label"><b>Part Number</b><span>(\u041D\u043E\u043C\u0435\u043D\u043A\u043B\u0430\u0442\u0443\u0440\u0430)</span></div><div class="tag-value">' + (t.pn||'') + '</div></div>' +
+      '<div class="tag-row"><div class="tag-label"><b>Serial Number</b><span>(\u0417\u0430\u0432\u043E\u0434\u0441\u044C\u043A\u0438\u0439 \u2116)</span></div><div class="tag-value">' + (t.sn||'') + '</div></div>' +
+      '<div class="tag-row"><div class="tag-label"><b>Quantity</b><span>(\u041A\u0456\u043B\u044C\u043A\u0456\u0441\u0442\u044C)</span></div><div class="tag-value">' + (t.qty||'') + '</div></div>' +
+      '<div class="tag-row"><div class="tag-label"><b>Acceptance Certificate/<br>Reference</b><span>(\u0410\u043A\u0442 \u0412\u041A/\u041F\u0456\u0434\u0441\u0442\u0430\u0432\u0430)</span></div><div class="tag-value">' + (t.act||'') + '</div></div>' +
+      '<div class="tag-row"><div class="tag-label"><b>Supplier/Customer</b><span>(\u041F\u043E\u0441\u0442\u0430\u0447\u0430\u043B\u044C\u043D\u0438\u043A/\u0417\u0430\u043C\u043E\u0432\u043D\u0438\u043A)</span></div><div class="tag-value">' + (t.supplier||'') + '</div></div>' +
+      '<div class="tag-row"><div class="tag-label"><b>Serviceable Until:</b><span>(\u041F\u0440\u0438\u0434\u0430\u0442\u043D\u0438\u0439 \u0434\u043E)</span></div><div class="tag-value">' + (t.until||'') + '</div></div>' +
+      '<div class="tag-row"><div class="tag-label"><b>Name/Signature</b><span>(\u041F\u0440\u0456\u0437\u0432\u0438\u0449\u0435/\u043F\u0456\u0434\u043F\u0438\u0441)</span></div><div class="tag-value">' + (t.inspector||'') + '</div></div>' +
+      '<div class="tag-row"><div class="tag-label"><b>Date</b><span>(\u0414\u0430\u0442\u0430)</span></div><div class="tag-value">' + (t.date||'') + '</div></div>' +
+      '<div class="tag-footer">AMO-CiV-F.0018 <b>Additional information on reverse side:</b> <span>(\u0414\u043E\u0434\u0430\u0442\u043A\u043E\u0432\u0430 \u0448\u0442\u0444\u043E\u0440\u043C\u0430\u0446\u0456\u044F \u043D\u0430 \u0437\u0432\u043E\u0440\u043E\u0442\u0456)</span></div>' +
+    '</div>';
+  }
+
+  function backCardHtml() {
+    return '<div class="tag-card" style="display:flex;flex-direction:column;">' +
+      '<div class="tag-header">' +
+        '<div class="tag-header-cell">\xABAVRONIS FZE\xBB</div>' +
+        '<div class="tag-header-cell">\xABSERVICEABLE/FIT FOR USE\xBB<br><span style="font-weight:400;font-style:italic;font-size:8px">(\xAB\u0421\u041F\u0420\u0410\u0412\u041D\u0418\u0419/\u041F\u0420\u0418\u0414\u0410\u0422\u041D\u0418\u0419\xBB)</span></div>' +
+        '<div class="tag-header-cell green"><div>GREEN</div><div class="green-label">(\u0437\u0435\u043B\u0435\u043D\u0438\u0439)</div></div>' +
+      '</div>' +
+      '<div style="flex:1;padding:6px 8px;display:flex;flex-direction:column;">' +
+        '<div style="font-size:9px;font-weight:700;margin-bottom:4px">Additional information:<br><span style="font-weight:400;font-style:italic">(\u0414\u043E\u0434\u0430\u0442\u043A\u043E\u0432\u0430 \u0456\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0456\u044F)</span></div>' +
+        '<div style="flex:1;border:1px solid #000;margin-top:4px;min-height:160px"></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  const css = [
+    '* { box-sizing: border-box; margin: 0; padding: 0; }',
+    '@page { size: A4 landscape; margin: 8mm; }',
+    'body { font-family: Arial, sans-serif; background: #fff; color: #000; }',
+    '.tags-grid { display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); gap: 6mm; width: 100%; height: calc(100vh - 16mm); }',
+    '.page-break { page-break-after: always; }',
+    '.tag-card { border: 2px solid #000; background: #fff; display: flex; flex-direction: column; }',
+    '.tag-header { display: grid; grid-template-columns: 1fr 2fr 55px; border-bottom: 2px solid #000; }',
+    '.tag-header-cell { padding: 5px 6px; display: flex; align-items: center; justify-content: center; text-align: center; font-weight: 700; font-size: 10px; line-height: 1.3; }',
+    '.tag-header-cell:not(:last-child) { border-right: 2px solid #000; }',
+    '.tag-header-cell.green { background: #4CAF50 !important; color: #fff; flex-direction: column; -webkit-print-color-adjust: exact; print-color-adjust: exact; }',
+    '.green-label { font-size: 8px; font-weight: 400; font-style: italic; }',
+    '.tag-row { display: grid; grid-template-columns: 120px 1fr; border-bottom: 1px solid #000; min-height: 22px; }',
+    '.tag-label { padding: 2px 5px; border-right: 2px solid #000; font-size: 8px; font-weight: 700; line-height: 1.3; display: flex; flex-direction: column; justify-content: center; }',
+    '.tag-label span { font-weight: 400; font-style: italic; }',
+    '.tag-value { padding: 2px 5px; font-size: 9px; display: flex; align-items: center; }',
+    '.tag-footer { padding: 3px 5px; font-size: 7.5px; font-weight: 700; border-top: 2px solid #000; }',
+    '.tag-footer span { font-weight: 400; font-style: italic; }'
+  ].join('\n');
+
+  // Будуємо HTML без template literals
+  let html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Birky AMO-CiV-F.0018</title><style>' + css + '</style></head><body>';
+
+  // Лицева сторона
+  pages.forEach(function(page) {
+    html += '<div class="tags-grid">';
+    page.forEach(function(t) { html += tagCardHtml(t); });
+    html += '</div><div class="page-break"></div>';
+  });
+
+  // Зворотня сторона
+  pages.forEach(function(page) {
+    html += '<div class="tags-grid">';
+    page.forEach(function() { html += backCardHtml(); });
+    html += '</div><div class="page-break"></div>';
+  });
+
+  html += '<script>window.onload=function(){window.print();}<' + '/script></body></html>';
+
   const win = window.open('', '_blank', 'width=1100,height=800');
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>Бірки AMO-CiV-F.0018</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  @page { size: A4 landscape; margin: 8mm; }
-  body { font-family: Arial, sans-serif; background: #fff; color: #000; width: 277mm; }
-  .tags-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: repeat(2, 1fr);
-    gap: 6mm;
-    width: 100%;
-    height: calc(100vh - 16mm);
-  }
-  .tag-card { display: flex; flex-direction: column; }
-  .tag-card { border: 2px solid #000; background: #fff; width: 100%; }
-  .tag-header { display: grid; grid-template-columns: 1fr 2fr 55px; border-bottom: 2px solid #000; }
-  .tag-header-cell {
-    padding: 5px 6px; display: flex; align-items: center; justify-content: center;
-    text-align: center; font-weight: 700; font-size: 10px; line-height: 1.3;
-  }
-  .tag-header-cell:not(:last-child) { border-right: 2px solid #000; }
-  .tag-header-cell.green {
-    background: #4CAF50 !important; color: #fff; flex-direction: column;
-    -webkit-print-color-adjust: exact; print-color-adjust: exact;
-  }
-  .green-label { font-size: 8px; font-weight: 400; font-style: italic; }
-  .tag-row { display: grid; grid-template-columns: 120px 1fr; border-bottom: 1px solid #000; min-height: 22px; }
-  .tag-row:last-of-type { border-bottom: none; }
-  .tag-label {
-    padding: 2px 5px; border-right: 2px solid #000; font-size: 8px;
-    font-weight: 700; line-height: 1.3; display: flex; flex-direction: column; justify-content: center;
-  }
-  .tag-label span { font-weight: 400; font-style: italic; }
-  .tag-value { padding: 2px 5px; font-size: 9px; display: flex; align-items: center; }
-  .tag-footer { padding: 3px 5px; font-size: 7.5px; font-weight: 700; border-top: 2px solid #000; }
-  .tag-footer span { font-weight: 400; font-style: italic; }
-  .page-break { page-break-after: always; }
-  @media print {
-    body { margin: 0; }
-  }
-</style></head><body>
-${tagHtml}
-<script>window.onload=function(){ window.print(); }<\/script>
-</body></html>`);
+  win.document.write(html);
   win.document.close();
 }
 
-// ===================== BACKUP =====================
-async function exportBackup() {
-  const [inventory, requests, journal, acts] = await Promise.all([
-    dbGetAll('inventory'), dbGetAll('requests'), dbGetAll('journal'), dbGetAll('acts')
-  ]);
-  const data = {version:2, exportedAt: now(), inventory, requests, journal, acts};
-  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `avronis_backup_${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-  showNotif('Резервну копію збережено ✅');
-}
-
-async function importBackup(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const text = await file.text();
-  let data;
-  try { data = JSON.parse(text); } catch(e) { showNotif('Невірний файл','err'); return; }
-  if (!confirm(`Відновити з резервної копії від ${data.exportedAt||'?'}?\nВсі поточні дані будуть замінені.`)) return;
-  if (!db) {
-    try { await initDB(); } catch(e) { showNotif('Помилка бази даних','err'); return; }
-  }
-  for (const store of ['inventory','requests','journal','acts']) {
-    try {
-      await dbClear(store);
-      for (const item of (data[store]||[])) {
-        const clean = Object.assign({}, item);
-        delete clean.id;
-        await dbAdd(store, clean);
-      }
-    } catch(e) { console.warn('store error:', store, e); }
-  }
-  showNotif('Дані відновлено з резервної копії ✅');
-  setTimeout(() => { loadDashboard(); renderBackupStats(); }, 300);
-  input.value = '';
-}
-
-async function renderBackupStats() {
-  const [inv, reqs, journal, acts] = await Promise.all([
-    dbGetAll('inventory'), dbGetAll('requests'), dbGetAll('journal'), dbGetAll('acts')
-  ]);
-  document.getElementById('db-stats').innerHTML = `
-    📦 Інвентар: <strong>${inv.length} позицій</strong><br>
-    📋 Заявки: <strong>${reqs.length}</strong> (активних: ${reqs.filter(r=>r.status!=='done').length})<br>
-    🔄 Журнал видач: <strong>${journal.length} записів</strong><br>
-    📝 Акти ВК: <strong>${acts.length}</strong>`;
-}
-
-// ===================== HANDLE HASH =====================
 function checkHash() {
   const isMobile = window.location.hash === '#mobile-request' ||
                    new URLSearchParams(window.location.search).get('mode') === 'mobile';
