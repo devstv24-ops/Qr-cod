@@ -1540,12 +1540,17 @@ async function syncRequestsFromGoogle() {
     const existing = await dbGetAll('requests');
     const existingIds = new Set(existing.map(r => r.googleRowId).filter(Boolean));
     const deletedIds = new Set(JSON.parse(localStorage.getItem('deletedRequestIds') || '[]'));
+    // Захист від дублів по createdAt+executor якщо немає googleRowId
+    const existingFingerprints = new Set(existing.map(r => (r.createdAt||'')+'|'+(r.executor||'')));
 
     let added = 0;
     for (const row of data.requests) {
       if (row.googleRowId && existingIds.has(row.googleRowId)) continue;
-      if (row.googleRowId && deletedIds.has(row.googleRowId)) continue; // видалена — не повертати
+      if (row.googleRowId && deletedIds.has(row.googleRowId)) continue;
       if (!row.executor && !row.aggregate && !(row.items && row.items.length)) continue;
+      // Перевіряємо fingerprint щоб не дублювати якщо немає googleRowId
+      const fp = (row.createdAt||'') + '|' + (row.executor||'');
+      if (!row.googleRowId && existingFingerprints.has(fp)) continue;
       await dbAdd('requests', {
         executor: row.executor || '',
         aggregate: row.aggregate || '',
@@ -1558,6 +1563,7 @@ async function syncRequestsFromGoogle() {
         googleRowId: row.googleRowId || null,
         source: 'mobile'
       });
+      existingFingerprints.add(fp);
       added++;
     }
 
