@@ -4503,28 +4503,33 @@ function setTagMode(mode) {
 }
 
 async function loadTagReqList() {
-  const journal = await dbGetAll('journal');
   const sel = document.getElementById('tag-req-select');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">⏳ Завантаження...</option>';
+
+  // Читаємо журнал частинами — тільки унікальні reqNum
+  const journal = await dbGetAll('journal');
+
+  // Групуємо по reqNum швидко
+  const grouped = Object.create(null);
+  for (const j of journal) {
+    if (!j.reqNum) continue;
+    if (!grouped[j.reqNum]) grouped[j.reqNum] = {first: j, count: 0};
+    grouped[j.reqNum].count++;
+  }
+
+  const keys = Object.keys(grouped).sort((a,b) => b.localeCompare(a)).slice(0, 300);
+
   sel.innerHTML = '<option value="">— Оберіть заявку —</option>';
-
-  // Групуємо журнал по reqNum
-  const grouped = {};
-  journal.forEach(j => {
-    if (!j.reqNum) return;
-    if (!grouped[j.reqNum]) grouped[j.reqNum] = [];
-    grouped[j.reqNum].push(j);
-  });
-
-  Object.keys(grouped)
-    .sort((a,b) => b.localeCompare(a))
-    .forEach(reqNum => {
-      const items = grouped[reqNum];
-      const first = items[0];
-      const opt = document.createElement('option');
-      opt.value = reqNum;
-      opt.textContent = reqNum + ' — ' + (first.aggregate||'—') + ' (' + items.length + ' поз.) · ' + (first.date||'').slice(0,10);
-      sel.appendChild(opt);
-    });
+  const frag = document.createDocumentFragment();
+  for (const reqNum of keys) {
+    const {first, count} = grouped[reqNum];
+    const opt = document.createElement('option');
+    opt.value = reqNum;
+    opt.textContent = reqNum + ' — ' + (first.aggregate||'—') + ' (' + count + ' поз.) · ' + (first.date||'').slice(0,10);
+    frag.appendChild(opt);
+  }
+  sel.appendChild(frag);
 }
 
 // Зберігаємо всі позиції поточної заявки для посторінкового друку
