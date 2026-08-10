@@ -4485,6 +4485,26 @@ function printTags() {
   const cols = active.length <= 2 ? active.length : 2;
   const tagHtml = active.map(t => renderTagCard(t, 0).replace(/<button[^>]*no-print[^>]*>.*?<\/button>/g, '')).join('');
 
+  // Зворотня сторона — однакова для всіх бірок
+  const backCardHtml = `<div class="tag-card">
+    <div class="tag-header">
+      <div class="tag-header-cell">«AVRONIS FZE»</div>
+      <div class="tag-header-cell">
+        «SERVICEABLE/FIT FOR USE»<br>
+        <span style="font-weight:400;font-style:italic;font-size:8px">(«СПРАВНИЙ/ПРИДАТНИЙ»)</span>
+      </div>
+      <div class="tag-header-cell green">
+        <div>GREEN</div>
+        <div class="green-label">(зелений)</div>
+      </div>
+    </div>
+    <div style="padding:6px 8px;border-top:1px solid #000">
+      <div style="font-size:9px;font-weight:700;margin-bottom:4px">Additional information:<br><span style="font-weight:400;font-style:italic">(Додаткова інформація)</span></div>
+      <div style="min-height:120px;border:1px solid #ddd;margin-top:4px"></div>
+    </div>
+  </div>`;
+  const backHtml = Array(active.length).fill(backCardHtml).join('');
+
   const win = window.open('', '_blank', 'width=1100,height=800');
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
 <title>Бірки AMO-CiV-F.0018</title>
@@ -4521,11 +4541,14 @@ function printTags() {
   .tag-value { padding: 2px 5px; font-size: 9px; display: flex; align-items: center; }
   .tag-footer { padding: 3px 5px; font-size: 7.5px; font-weight: 700; border-top: 2px solid #000; }
   .tag-footer span { font-weight: 400; font-style: italic; }
+  .page-break { page-break-after: always; }
   @media print {
     body { margin: 0; }
   }
 </style></head><body>
 <div class="tags-grid">${tagHtml}</div>
+<div class="page-break"></div>
+<div class="tags-grid">${backHtml}</div>
 <script>window.onload=function(){ window.print(); }<\/script>
 </body></html>`);
   win.document.close();
