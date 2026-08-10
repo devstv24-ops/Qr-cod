@@ -842,8 +842,16 @@ select option { background: var(--surface2); }
 
         <!-- Вибір актів -->
         <div class="no-print" style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:20px;margin-bottom:24px">
-          <div style="font-size:14px;font-weight:600;margin-bottom:12px">Оберіть акти ВК (до 4-х):</div>
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px" id="tag-act-selectors">
+          <!-- Перемикач режиму -->
+          <div style="display:flex;gap:8px;margin-bottom:16px">
+            <button id="tag-mode-act" class="btn btn-primary btn-sm" onclick="setTagMode('act')">📋 З акту ВК</button>
+            <button id="tag-mode-req" class="btn btn-ghost btn-sm" onclick="setTagMode('req')">📦 З заявки</button>
+          </div>
+
+          <!-- Режим: акти ВК -->
+          <div id="tag-panel-act">
+            <div style="font-size:14px;font-weight:600;margin-bottom:12px">Оберіть акти ВК (до 4-х):</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px" id="tag-act-selectors">
             <div class="tag-act-slot" id="tag-slot-0">
               <select class="tag-act-select" onchange="onTagActSelect(0,this.value)" style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px">
                 <option value="">— Акт 1 —</option>
@@ -865,6 +873,17 @@ select option { background: var(--surface2); }
               </select>
             </div>
           </div>
+          </div><!-- /tag-panel-act -->
+
+          <!-- Режим: заявки -->
+          <div id="tag-panel-req" style="display:none">
+            <div style="font-size:14px;font-weight:600;margin-bottom:12px">Оберіть заявку:</div>
+            <select id="tag-req-select" onchange="onTagReqSelect(this.value)" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px">
+              <option value="">— Оберіть заявку —</option>
+            </select>
+            <div id="tag-req-info" style="margin-top:12px;font-size:12px;color:var(--text2)"></div>
+          </div>
+
         </div>
 
         <!-- Бірки для відображення -->
@@ -4337,6 +4356,75 @@ async function submitMobileManual() {
 
 // ===================== БІРКИ =====================
 let tagData = [null, null, null, null];
+
+let tagMode = 'act'; // 'act' або 'req'
+
+function setTagMode(mode) {
+  tagMode = mode;
+  document.getElementById('tag-panel-act').style.display = mode === 'act' ? '' : 'none';
+  document.getElementById('tag-panel-req').style.display = mode === 'req' ? '' : 'none';
+  document.getElementById('tag-mode-act').className = mode === 'act' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+  document.getElementById('tag-mode-req').className = mode === 'req' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+  if (mode === 'req') loadTagReqList();
+  else { tagData = [null,null,null,null]; renderTagsPreview(); }
+}
+
+async function loadTagReqList() {
+  const reqs = await dbGetAll('requests');
+  const sel = document.getElementById('tag-req-select');
+  sel.innerHTML = '<option value="">— Оберіть заявку —</option>';
+  [...reqs]
+    .filter(r => r.reqNum && (r.items||[]).length > 0)
+    .sort((a,b) => (b.reqNum||'').localeCompare(a.reqNum||''))
+    .forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.id;
+      opt.textContent = r.reqNum + ' — ' + (r.aggregate||'Без агрегату') + ' (' + (r.items||[]).length + ' поз.)';
+      sel.appendChild(opt);
+    });
+}
+
+async function onTagReqSelect(id) {
+  if (!id) { tagData = [null,null,null,null]; renderTagsPreview(); return; }
+  const reqs = await dbGetAll('requests');
+  const req = reqs.find(r => String(r.id) === String(id));
+  if (!req) return;
+
+  const items = req.items || [];
+  const date = (req.issuedAt || req.createdAt || new Date().toISOString()).slice(0,10);
+  const today = new Date().toISOString().slice(0,10);
+
+  // Отримуємо дані зі складу для кожної позиції
+  const inv = await dbGetAll('inventory');
+
+  tagData = [null,null,null,null];
+  items.slice(0,4).forEach((it, i) => {
+    // Шукаємо позицію на складі щоб взяти actNum і supplier
+    const invItem = inv.find(inv =>
+      (it.inventoryId && inv.id === it.inventoryId) ||
+      (it.name && inv.name === it.name && it.pn === inv.pn)
+    );
+    tagData[i] = {
+      name: it.name || '',
+      pn: it.pn || '—',
+      sn: invItem?.sn || '—',
+      qty: (it.qty || '') + ' ' + (it.unit || 'шт'),
+      act: invItem?.actNum || req.reqNum || '',
+      supplier: invItem?.supplier || '',
+      until: '',
+      inspector: req.storekeeper || req.executor || '',
+      date: today
+    };
+  });
+
+  const info = document.getElementById('tag-req-info');
+  if (items.length > 4) {
+    info.innerHTML = `⚠️ Заявка має ${items.length} позицій — показано перші 4. Решта: ${items.slice(4).map(i=>i.name).join(', ')}`;
+  } else {
+    info.innerHTML = `✅ ${items.length} позицій — всі відображено`;
+  }
+  renderTagsPreview();
+}
 
 async function renderTags() {
   const acts = await dbGetAll('acts');
