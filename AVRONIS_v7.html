@@ -882,6 +882,10 @@ select option { background: var(--surface2); }
               <option value="">— Оберіть заявку —</option>
             </select>
             <div id="tag-req-info" style="margin-top:12px;font-size:12px;color:var(--text2)"></div>
+            <div id="tag-req-date-row" style="display:none;margin-top:12px;display:flex;align-items:center;gap:12px">
+              <label style="font-size:13px;font-weight:600">Дата на бірках:</label>
+              <input type="date" id="tag-req-date" style="padding:6px 10px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px" onchange="updateTagDates(this.value)">
+            </div>
           </div>
 
         </div>
@@ -4397,12 +4401,25 @@ async function loadTagReqList() {
 // Зберігаємо всі позиції поточної заявки для посторінкового друку
 let tagJournalItems = [];
 
+function updateTagDates(date) {
+  if (!date) return;
+  tagJournalItems.forEach(j => j._overrideDate = date);
+  tagData.forEach(t => { if(t) t.date = date; });
+  renderTagsPreview();
+}
+
 async function onTagReqSelect(reqNum) {
   tagJournalItems = [];
   tagData = [null,null,null,null];
   const info = document.getElementById('tag-req-info');
+  const dateRow = document.getElementById('tag-req-date-row');
 
-  if (!reqNum) { renderTagsPreview(); info.innerHTML = ''; return; }
+  if (!reqNum) {
+    renderTagsPreview();
+    info.innerHTML = '';
+    if(dateRow) dateRow.style.display = 'none';
+    return;
+  }
 
   const journal = await dbGetAll('journal');
   const items = journal.filter(j => j.reqNum === reqNum);
@@ -4426,10 +4443,18 @@ async function onTagReqSelect(reqNum) {
     };
   });
 
+  // Показуємо поле дати
+  if(dateRow) {
+    dateRow.style.display = 'flex';
+    const journalDate = (items[0]?.date || '').slice(0,10);
+    const dateInput = document.getElementById('tag-req-date');
+    if(dateInput) dateInput.value = journalDate;
+  }
+
   if (items.length > 4) {
-    info.innerHTML = `⚠️ ${items.length} позицій — при друці буде ${Math.ceil(items.length/4)} аркушів по 4`;
+    info.innerHTML = '⚠️ ' + items.length + ' позицій — при друці буде ' + Math.ceil(items.length/4) + ' аркушів по 4';
   } else {
-    info.innerHTML = `✅ ${items.length} позицій`;
+    info.innerHTML = '✅ ' + items.length + ' позицій';
   }
   renderTagsPreview();
 }
@@ -4577,6 +4602,7 @@ function saveTagEdit() {
 function printTags() {
   let allItems = [];
   if (tagMode === 'req' && tagJournalItems.length > 0) {
+    const overrideDate = document.getElementById('tag-req-date')?.value || '';
     allItems = tagJournalItems.map(j => ({
       name: j.name || '',
       pn: j.pn || '—',
@@ -4586,7 +4612,7 @@ function printTags() {
       supplier: j.sourceSupplier || '',
       until: '',
       inspector: j.storekeeper || '',
-      date: (j.date || '').slice(0,10)
+      date: overrideDate || (j.date || '').slice(0,10)
     }));
   } else {
     allItems = tagData.filter(Boolean);
