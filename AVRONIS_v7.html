@@ -4624,25 +4624,6 @@ function printTags() {
   const tagHtml = frontHtml + backHtml;
 
   // Зворотня сторона — однакова для всіх бірок
-  const backCardHtml = `<div class="tag-card" style="display:flex;flex-direction:column;">
-    <div class="tag-header">
-      <div class="tag-header-cell">«AVRONIS FZE»</div>
-      <div class="tag-header-cell">
-        «SERVICEABLE/FIT FOR USE»<br>
-        <span style="font-weight:400;font-style:italic;font-size:8px">(«СПРАВНИЙ/ПРИДАТНИЙ»)</span>
-      </div>
-      <div class="tag-header-cell green">
-        <div>GREEN</div>
-        <div class="green-label">(зелений)</div>
-      </div>
-    </div>
-    <div style="flex:1;padding:6px 8px;display:flex;flex-direction:column;">
-      <div style="font-size:9px;font-weight:700;margin-bottom:4px">Additional information:<br><span style="font-weight:400;font-style:italic">(Додаткова інформація)</span></div>
-      <div style="flex:1;border:1px solid #000;margin-top:4px;min-height:160px"></div>
-    </div>
-  </div>`;
-  const backHtml = Array(active.length).fill(backCardHtml).join('');
-
   const win = window.open('', '_blank', 'width=1100,height=800');
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
 <title>Бірки AMO-CiV-F.0018</title>
