@@ -1481,7 +1481,7 @@ async function sendToSheets(req) {
       mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        reqId: 'ЗАМ-' + String(req.id || Date.now()).padStart(4,'0'),
+        reqId: req.reqNum || 'ЗАМ-' + String(req.id || Date.now()).padStart(4,'0'),
         executor: req.executor || '',
         aggregate: req.aggregate || '',
         project: req.project || '',
@@ -2635,6 +2635,8 @@ async function submitRequest() {
   };
   const newId = await dbAdd('requests', req);
   req.id = newId;
+  req.reqNum = 'ЗАМ-' + String(newId).padStart(4,'0');
+  await dbPut('requests', req);
   sendToSheets(req);
   showNotif('✅ Заявку подано!');
   closeModal('modal-request');
@@ -3870,7 +3872,7 @@ async function printAct(id) {
     <td style="${SB}width:30px">№</td>
     <td style="${S}width:90px"><strong>${actN}</strong></td>
     <td style="${SB}width:50px">Date:<br><em style="font-weight:normal;font-size:9px">(дата)</em></td>
-    <td style="${S}width:90px">${a.date||''}</td>
+    <td style="${S}width:90px">${(a.date||'').slice(0,10)}</td>
     <td style="${SB}width:100px;font-size:9px">AMO-CiV-F.0015</td>
   </tr>
   <tr><td colspan="8" style="${SH}">I. Compliance Check Against Purchase Order<br><em style="font-weight:normal">(перевірка відповідності замовленню)</em></td></tr>
@@ -4139,7 +4141,9 @@ async function submitMobileKit(kitKey) {
   };
   const newId = await dbAdd('requests', req);
   req.id = newId;
-  sendToSheets(req); // синхронізація з Google Sheets
+  req.reqNum = 'ЗАМ-' + String(newId).padStart(4,'0');
+  await dbPut('requests', req);
+  sendToSheets(req);
   renderMobileForm('success');
   loadDashboard();
   showNotif('Нова заявка з QR!','info');
@@ -4167,7 +4171,9 @@ async function submitMobileManual() {
   const req = {executor:exec, aggregate:agg, project:proj, items, status:'new', createdAt:now(), note:'Ручне введення з QR'};
   const newId = await dbAdd('requests', req);
   req.id = newId;
-  sendToSheets(req); // синхронізація з Google Sheets
+  req.reqNum = 'ЗАМ-' + String(newId).padStart(4,'0');
+  await dbPut('requests', req);
+  sendToSheets(req);
   renderMobileForm('success');
   loadDashboard();
   showNotif('Нова заявка з QR!','info');
