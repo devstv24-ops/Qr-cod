@@ -845,7 +845,7 @@ select option { background: var(--surface2); }
           <!-- Перемикач режиму -->
           <div style="display:flex;gap:8px;margin-bottom:16px">
             <button id="tag-mode-act" class="btn btn-primary btn-sm" onclick="setTagMode('act')">📋 З акту ВК</button>
-            <button id="tag-mode-req" class="btn btn-ghost btn-sm" onclick="setTagMode('req')">📦 З заявки</button>
+            <button id="tag-mode-req" class="btn btn-ghost btn-sm" onclick="setTagMode('req')">📋 З журналу видачі</button>
           </div>
 
           <!-- Режим: акти ВК -->
@@ -877,7 +877,7 @@ select option { background: var(--surface2); }
 
           <!-- Режим: заявки -->
           <div id="tag-panel-req" style="display:none">
-            <div style="font-size:14px;font-weight:600;margin-bottom:12px">Оберіть заявку:</div>
+            <div style="font-size:14px;font-weight:600;margin-bottom:12px">Оберіть заявку з журналу видачі:</div>
             <select id="tag-req-select" onchange="onTagReqSelect(this.value)" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px">
               <option value="">— Оберіть заявку —</option>
             </select>
@@ -4370,58 +4370,66 @@ function setTagMode(mode) {
 }
 
 async function loadTagReqList() {
-  const reqs = await dbGetAll('requests');
+  const journal = await dbGetAll('journal');
   const sel = document.getElementById('tag-req-select');
   sel.innerHTML = '<option value="">— Оберіть заявку —</option>';
-  [...reqs]
-    .filter(r => r.reqNum && (r.items||[]).length > 0)
-    .sort((a,b) => (b.reqNum||'').localeCompare(a.reqNum||''))
-    .forEach(r => {
+
+  // Групуємо журнал по reqNum
+  const grouped = {};
+  journal.forEach(j => {
+    if (!j.reqNum) return;
+    if (!grouped[j.reqNum]) grouped[j.reqNum] = [];
+    grouped[j.reqNum].push(j);
+  });
+
+  Object.keys(grouped)
+    .sort((a,b) => b.localeCompare(a))
+    .forEach(reqNum => {
+      const items = grouped[reqNum];
+      const first = items[0];
       const opt = document.createElement('option');
-      opt.value = r.id;
-      opt.textContent = r.reqNum + ' — ' + (r.aggregate||'Без агрегату') + ' (' + (r.items||[]).length + ' поз.)';
+      opt.value = reqNum;
+      opt.textContent = reqNum + ' — ' + (first.aggregate||'—') + ' (' + items.length + ' поз.) · ' + (first.date||'').slice(0,10);
       sel.appendChild(opt);
     });
 }
 
-async function onTagReqSelect(id) {
-  if (!id) { tagData = [null,null,null,null]; renderTagsPreview(); return; }
-  const reqs = await dbGetAll('requests');
-  const req = reqs.find(r => String(r.id) === String(id));
-  if (!req) return;
+// Зберігаємо всі позиції поточної заявки для посторінкового друку
+let tagJournalItems = [];
 
-  const items = req.items || [];
-  const date = (req.issuedAt || req.createdAt || new Date().toISOString()).slice(0,10);
-  const today = new Date().toISOString().slice(0,10);
-
-  // Отримуємо дані зі складу для кожної позиції
-  const inv = await dbGetAll('inventory');
-
+async function onTagReqSelect(reqNum) {
+  tagJournalItems = [];
   tagData = [null,null,null,null];
-  items.slice(0,4).forEach((it, i) => {
-    // Шукаємо позицію на складі щоб взяти actNum і supplier
-    const invItem = inv.find(inv =>
-      (it.inventoryId && inv.id === it.inventoryId) ||
-      (it.name && inv.name === it.name && it.pn === inv.pn)
-    );
+  const info = document.getElementById('tag-req-info');
+
+  if (!reqNum) { renderTagsPreview(); info.innerHTML = ''; return; }
+
+  const journal = await dbGetAll('journal');
+  const items = journal.filter(j => j.reqNum === reqNum);
+  if (!items.length) return;
+
+  tagJournalItems = items;
+
+  // Показуємо перші 4
+  tagData = [null,null,null,null];
+  items.slice(0,4).forEach((j, i) => {
     tagData[i] = {
-      name: it.name || '',
-      pn: it.pn || '—',
-      sn: invItem?.sn || '—',
-      qty: (it.qty || '') + ' ' + (it.unit || 'шт'),
-      act: invItem?.actNum || req.reqNum || '',
-      supplier: invItem?.supplier || '',
+      name: j.name || '',
+      pn: j.pn || '—',
+      sn: j.sn || '—',
+      qty: (j.qty || '') + ' ' + (j.unit || 'шт'),
+      act: j.sourceActNum || '',
+      supplier: j.sourceSupplier || '',
       until: '',
-      inspector: req.storekeeper || req.executor || '',
-      date: today
+      inspector: j.storekeeper || '',
+      date: (j.date || '').slice(0,10)
     };
   });
 
-  const info = document.getElementById('tag-req-info');
   if (items.length > 4) {
-    info.innerHTML = `⚠️ Заявка має ${items.length} позицій — показано перші 4. Решта: ${items.slice(4).map(i=>i.name).join(', ')}`;
+    info.innerHTML = `⚠️ ${items.length} позицій — при друці буде ${Math.ceil(items.length/4)} аркушів по 4`;
   } else {
-    info.innerHTML = `✅ ${items.length} позицій — всі відображено`;
+    info.innerHTML = `✅ ${items.length} позицій`;
   }
   renderTagsPreview();
 }
@@ -4567,11 +4575,53 @@ function saveTagEdit() {
 }
 
 function printTags() {
-  const active = tagData.filter(Boolean);
-  if (!active.length) { showNotif('Оберіть хоча б один акт', 'err'); return; }
+  // Якщо режим журналу і є більше 4 позицій — друкуємо всі по 4
+  let allItems = [];
+  if (tagMode === 'req' && tagJournalItems.length > 0) {
+    allItems = tagJournalItems.map(j => ({
+      name: j.name || '',
+      pn: j.pn || '—',
+      sn: j.sn || '—',
+      qty: (j.qty || '') + ' ' + (j.unit || 'шт'),
+      act: j.sourceActNum || '',
+      supplier: j.sourceSupplier || '',
+      until: '',
+      inspector: j.storekeeper || '',
+      date: (j.date || '').slice(0,10)
+    }));
+  } else {
+    allItems = tagData.filter(Boolean);
+  }
 
-  const cols = active.length <= 2 ? active.length : 2;
-  const tagHtml = active.map(t => renderTagCard(t, 0).replace(/<button[^>]*no-print[^>]*>.*?<\/button>/g, '')).join('');
+  const active = allItems;
+  if (!active.length) { showNotif('Оберіть хоча б одну позицію', 'err'); return; }
+
+  const cols = 2;
+  // Розбиваємо на групи по 4 — кожна група = один аркуш
+  const pages = [];
+  for (let i = 0; i < active.length; i += 4) {
+    pages.push(active.slice(i, i + 4));
+  }
+  // Лицева сторона: всі аркуші
+  const frontHtml = pages.map(page =>
+    `<div class="tags-grid">${page.map(t => renderTagCard(t, 0).replace(/<button[^>]*class="[^"]*no-print[^"]*"[^>]*>.*?<\/button>/gs, '')).join('')}</div><div class="page-break"></div>`
+  ).join('');
+  // Зворотня сторона: всі аркуші
+  const backCardHtmlLocal = `<div class="tag-card" style="display:flex;flex-direction:column;">
+    <div class="tag-header">
+      <div class="tag-header-cell">«AVRONIS FZE»</div>
+      <div class="tag-header-cell">«SERVICEABLE/FIT FOR USE»<br><span style="font-weight:400;font-style:italic;font-size:8px">(«СПРАВНИЙ/ПРИДАТНИЙ»)</span></div>
+      <div class="tag-header-cell green"><div>GREEN</div><div class="green-label">(зелений)</div></div>
+    </div>
+    <div style="flex:1;padding:6px 8px;display:flex;flex-direction:column;">
+      <div style="font-size:9px;font-weight:700;margin-bottom:4px">Additional information:<br><span style="font-weight:400;font-style:italic">(Додаткова інформація)</span></div>
+      <div style="flex:1;border:1px solid #000;margin-top:4px;min-height:160px"></div>
+    </div>
+  </div>`;
+  const backHtml = pages.map(page =>
+    `<div class="tags-grid">${Array(page.length).fill(backCardHtmlLocal).join('')}</div><div class="page-break"></div>`
+  ).join('');
+  const tagHtml = frontHtml + backHtml;
 
   // Зворотня сторона — однакова для всіх бірок
   const backCardHtml = `<div class="tag-card" style="display:flex;flex-direction:column;">
@@ -4636,9 +4686,7 @@ function printTags() {
     body { margin: 0; }
   }
 </style></head><body>
-<div class="tags-grid">${tagHtml}</div>
-<div class="page-break"></div>
-<div class="tags-grid">${backHtml}</div>
+${tagHtml}
 <script>window.onload=function(){ window.print(); }<\/script>
 </body></html>`);
   win.document.close();
