@@ -2010,6 +2010,13 @@ function scheduleBackup() {
   _backupTimer = setTimeout(() => { autoBackupToSheets(); _backupTimer = null; }, 3000);
 }
 
+async function ensureItemsArray(req) {
+  if (!Array.isArray(req.items)) {
+    try { req.items = JSON.parse(req.itemsJson || '[]'); } catch(e) { req.items = []; }
+  }
+  return req;
+}
+
 function dbGetAll(store) {
   return new Promise((res,rej)=>{
     try {
@@ -2400,6 +2407,14 @@ function filterActsTo(actNum) {
 
 // ===================== REQUESTS =====================
 async function renderRequests() {
+  // Гарантуємо що всі заявки мають items як масив
+  const allReqs = await dbGetAll('requests');
+  for (const r of allReqs) {
+    if (!Array.isArray(r.items)) {
+      r.items = (() => { try { return JSON.parse(r.itemsJson||'[]'); } catch(e) { return []; } })();
+      try { await dbPut('requests', r); } catch(e) {}
+    }
+  }
   const reqs = await dbGetAll('requests');
   let filtered = reqs;
   if (currentReqFilter !== 'all') filtered = reqs.filter(r=>r.status===currentReqFilter);
@@ -2421,9 +2436,9 @@ async function renderRequests() {
         <span class="badge ${r.status==='new'?'badge-info':r.status==='processing'?'badge-warn':r.status==='partial'?'badge-warn':'badge-ok'}">${r.status==='new'?'🔵 Нова':r.status==='processing'?'🟡 В роботі':r.status==='partial'?'🟠 Частково':'🟢 Виконана'}</span>
       </div>
       <div class="req-parts">
-        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Позиції (${r.items.length}):</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Позиції (${ (r.items||[]).length }):</div>
         <div style="max-height:160px;overflow-y:auto">
-        ${r.items.map((it,i)=>`
+        ${(r.items||[]).map((it,i)=>`
           <div class="req-part-row">
             <span>${i+1}. ${it.name}${it.pn?' <span class="td-mono" style="color:var(--text2)">['+it.pn+']</span>':''}</span>
             <span style="font-weight:600">${it.qty} ${it.unit||'шт'}</span>
