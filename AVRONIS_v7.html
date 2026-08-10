@@ -933,7 +933,7 @@ select option { background: var(--surface2); }
         <div class="btn-group" style="margin-bottom:16px">
           <button class="btn btn-success" onclick="exportBackup()">📥 Зберегти резервну копію (JSON)</button>
           <button class="btn btn-warn" onclick="document.getElementById('import-file').click()">📤 Відновити з копії</button>
-          <input type="file" id="import-file" accept=".json" style="display:none" onchange="importBackup(this)">
+          <input type="file" id="import-file" accept=".json" style="display:none" onchange="importBackupFromInput(this)">
           <button class="btn btn-primary" onclick="syncActsToInventory().then(()=>{renderBackupStats();loadDashboard();})">🔄 Синхронізувати акти → склад</button>
           <button class="btn btn-warn" onclick="reloadActsFromPreloaded()">♻️ Перезавантажити реєстр актів</button>
           <button class="btn btn-ghost" onclick="fixJournalPns()" title="Виправити pn в старих записах журналу щоб збіглись зі складом">🔧 Виправити pn в журналі</button>
@@ -2183,6 +2183,125 @@ function initDB() {
     req.onerror = e => rej(e.target.error || e);
     req.onblocked = () => rej(new Error('DB blocked'));
   });
+}
+
+
+async function exportBackup() {
+  try {
+    const get = s => {
+      if (!db.objectStoreNames.contains(s)) return Promise.resolve([]);
+      return new Promise(r=>{const q=db.transaction(s).objectStore(s).getAll();q.onsuccess=e=>r(e.target.result);q.onerror=()=>r([]);});
+    };
+    const data = {
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      inventory: await get('inventory'),
+      journal: await get('journal'),
+      requests: await get('requests'),
+      acts: await get('acts'),
+      tools_edits: await get('tools_edits'),
+      meas_edits: await get('meas_edits'),
+      quarantine: await get('quarantine'),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'avronis_backup_' + new Date().toISOString().slice(0,10) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showNotif('✅ Резервну копію збережено');
+  } catch(e) {
+    showNotif('❌ Помилка збереження: ' + e.message, 'err');
+  }
+}
+
+async function importBackupFromInput(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const d = JSON.parse(text);
+    const restore = async (storeName, items, filterFn) => {
+      if (!items?.length) return;
+      const real = filterFn ? items.filter(filterFn) : items;
+      if (!real.length) return;
+      if (!db.objectStoreNames.contains(storeName)) return;
+      const tx = db.transaction(storeName,'readwrite');
+      const s = tx.objectStore(storeName);
+      s.clear();
+      for (const item of real) { const c={...item}; delete c.id; s.add(c); }
+      await new Promise(r=>tx.oncomplete=r);
+    };
+    await restore('inventory', d.inventory, i=>i.name);
+    await restore('journal', d.journal, j=>j.name||j.pn);
+    await restore('acts', d.acts, a=>a.actNum);
+    await restore('requests', d.requests, r=>r.executor||r.aggregate||(r.items&&r.items.length>0));
+    await restore('tools_edits', d.tools_edits);
+    await restore('meas_edits', d.meas_edits);
+    await restore('quarantine', d.quarantine);
+    showNotif('✅ Дані відновлено з копії');
+    setTimeout(()=>location.reload(), 1000);
+  } catch(e) {
+    showNotif('❌ Помилка: ' + e.message, 'err');
+  }
+}
+
+async function importBackup() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = async (e) => {
+    try {
+      const text = await e.target.files[0].text();
+      const d = JSON.parse(text);
+      const restore = async (storeName, items, filterFn) => {
+        if (!items?.length) return;
+        const real = filterFn ? items.filter(filterFn) : items;
+        if (!real.length) return;
+        if (!db.objectStoreNames.contains(storeName)) return;
+        const tx = db.transaction(storeName,'readwrite');
+        const s = tx.objectStore(storeName);
+        s.clear();
+        for (const item of real) { const c={...item}; delete c.id; s.add(c); }
+        await new Promise(r=>tx.oncomplete=r);
+        console.log('✅', storeName, real.length);
+      };
+      await restore('inventory', d.inventory, i=>i.name);
+      await restore('journal', d.journal, j=>j.name||j.pn);
+      await restore('acts', d.acts, a=>a.actNum);
+      await restore('requests', d.requests, r=>r.id||r.executor||r.aggregate);
+      await restore('tools_edits', d.tools_edits);
+      await restore('meas_edits', d.meas_edits);
+      await restore('quarantine', d.quarantine);
+      showNotif('✅ Дані відновлено з копії');
+      setTimeout(()=>location.reload(), 1000);
+    } catch(e) {
+      showNotif('❌ Помилка відновлення: ' + e.message, 'err');
+    }
+  };
+  input.click();
+}
+
+async function renderBackupStats() {
+  const statsEl = document.getElementById('backup-stats');
+  if (!statsEl) return;
+  try {
+    const get = s => {
+      if (!db.objectStoreNames.contains(s)) return Promise.resolve([]);
+      return new Promise(r=>{const q=db.transaction(s).objectStore(s).getAll();q.onsuccess=e=>r(e.target.result);q.onerror=()=>r([]);});
+    };
+    const [inv, journal, reqs, acts] = await Promise.all([
+      get('inventory'), get('journal'), get('requests'), get('acts')
+    ]);
+    statsEl.innerHTML =
+      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px">' +
+      '<div style="background:var(--surface2);padding:12px;border-radius:8px;text-align:center"><div style="font-size:24px;font-weight:700">' + inv.filter(i=>i.name).length + '</div><div style="font-size:12px;color:var(--text2)">Інвентар</div></div>' +
+      '<div style="background:var(--surface2);padding:12px;border-radius:8px;text-align:center"><div style="font-size:24px;font-weight:700">' + journal.filter(j=>j.name||j.pn).length + '</div><div style="font-size:12px;color:var(--text2)">Журнал видач</div></div>' +
+      '<div style="background:var(--surface2);padding:12px;border-radius:8px;text-align:center"><div style="font-size:24px;font-weight:700">' + reqs.length + '</div><div style="font-size:12px;color:var(--text2)">Заявки</div></div>' +
+      '<div style="background:var(--surface2);padding:12px;border-radius:8px;text-align:center"><div style="font-size:24px;font-weight:700">' + acts.length + '</div><div style="font-size:12px;color:var(--text2)">Акти ВК</div></div>' +
+      '</div>';
+  } catch(e) { if(statsEl) statsEl.innerHTML = ''; }
 }
 
 // Stores які потребують автобекапу після кожного запису
