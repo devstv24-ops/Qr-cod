@@ -4486,7 +4486,7 @@ function printTags() {
   const tagHtml = active.map(t => renderTagCard(t, 0).replace(/<button[^>]*no-print[^>]*>.*?<\/button>/g, '')).join('');
 
   // Зворотня сторона — однакова для всіх бірок
-  const backCardHtml = `<div class="tag-card">
+  const backCardHtml = `<div class="tag-card" style="display:flex;flex-direction:column;">
     <div class="tag-header">
       <div class="tag-header-cell">«AVRONIS FZE»</div>
       <div class="tag-header-cell">
@@ -4498,9 +4498,9 @@ function printTags() {
         <div class="green-label">(зелений)</div>
       </div>
     </div>
-    <div style="padding:6px 8px;border-top:1px solid #000">
+    <div style="flex:1;padding:6px 8px;display:flex;flex-direction:column;">
       <div style="font-size:9px;font-weight:700;margin-bottom:4px">Additional information:<br><span style="font-weight:400;font-style:italic">(Додаткова інформація)</span></div>
-      <div style="min-height:120px;border:1px solid #ddd;margin-top:4px"></div>
+      <div style="flex:1;border:1px solid #000;margin-top:4px;min-height:160px"></div>
     </div>
   </div>`;
   const backHtml = Array(active.length).fill(backCardHtml).join('');
@@ -4515,10 +4515,12 @@ function printTags() {
   .tags-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: repeat(2, auto);
+    grid-template-rows: repeat(2, 1fr);
     gap: 6mm;
     width: 100%;
+    height: calc(100vh - 16mm);
   }
+  .tag-card { display: flex; flex-direction: column; }
   .tag-card { border: 2px solid #000; background: #fff; width: 100%; }
   .tag-header { display: grid; grid-template-columns: 1fr 2fr 55px; border-bottom: 2px solid #000; }
   .tag-header-cell {
