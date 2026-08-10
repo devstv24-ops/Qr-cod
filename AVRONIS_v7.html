@@ -4484,12 +4484,22 @@ let tagMode = 'act'; // 'act' або 'req'
 
 function setTagMode(mode) {
   tagMode = mode;
-  document.getElementById('tag-panel-act').style.display = mode === 'act' ? '' : 'none';
-  document.getElementById('tag-panel-req').style.display = mode === 'req' ? '' : 'none';
-  document.getElementById('tag-mode-act').className = mode === 'act' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
-  document.getElementById('tag-mode-req').className = mode === 'req' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
-  if (mode === 'req') loadTagReqList();
-  else { tagData = [null,null,null,null]; renderTagsPreview(); }
+  const panelAct = document.getElementById('tag-panel-act');
+  const panelReq = document.getElementById('tag-panel-req');
+  const btnAct = document.getElementById('tag-mode-act');
+  const btnReq = document.getElementById('tag-mode-req');
+  if (panelAct) panelAct.style.display = mode === 'act' ? '' : 'none';
+  if (panelReq) panelReq.style.display = mode === 'req' ? '' : 'none';
+  if (btnAct) btnAct.className = mode === 'act' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+  if (btnReq) btnReq.className = mode === 'req' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+  // Скидаємо дані попереднього режиму
+  tagData = [null,null,null,null];
+  tagJournalItems = [];
+  if (mode === 'req') {
+    setTimeout(() => loadTagReqList(), 0);
+  } else {
+    renderTagsPreview();
+  }
 }
 
 async function loadTagReqList() {
