@@ -4438,7 +4438,7 @@ async function onTagReqSelect(reqNum) {
       act: j.sourceActNum || '',
       supplier: j.sourceSupplier || '',
       until: '',
-      inspector: j.storekeeper || '',
+      inspector: j.executor || j.storekeeper || '',
       date: (j.date || '').slice(0,10)
     };
   });
@@ -4611,7 +4611,7 @@ function printTags() {
       act: j.sourceActNum || '',
       supplier: j.sourceSupplier || '',
       until: '',
-      inspector: j.storekeeper || '',
+      inspector: j.executor || j.storekeeper || '',
       date: overrideDate || (j.date || '').slice(0,10)
     }));
   } else {
