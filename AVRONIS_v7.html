@@ -354,6 +354,89 @@ select option { background: var(--surface2); }
 .act-preview { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
 .act-preview table { font-size: 12px; }
 .act-preview th, .act-preview td { border: 1px solid var(--border); padding: 6px 8px; }
+
+/* === БІРКИ === */
+.tag-card {
+  border: 2px solid #000;
+  font-family: Arial, sans-serif;
+  background: #fff;
+  color: #000;
+  page-break-inside: avoid;
+}
+.tag-header {
+  display: grid;
+  grid-template-columns: 1fr 2fr 80px;
+  border-bottom: 2px solid #000;
+}
+.tag-header-cell {
+  padding: 10px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.3;
+}
+.tag-header-cell:not(:last-child) {
+  border-right: 2px solid #000;
+}
+.tag-header-cell.green {
+  background: #4CAF50;
+  color: #fff;
+  flex-direction: column;
+}
+.tag-header-cell.green .green-label {
+  font-size: 11px;
+  font-weight: 400;
+  font-style: italic;
+}
+.tag-row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  border-bottom: 1px solid #000;
+  min-height: 32px;
+}
+.tag-row:last-child { border-bottom: none; }
+.tag-label {
+  padding: 5px 8px;
+  border-right: 2px solid #000;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.tag-label span {
+  font-weight: 400;
+  font-style: italic;
+}
+.tag-value {
+  padding: 5px 8px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+}
+.tag-footer {
+  padding: 5px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  border-top: 2px solid #000;
+}
+.tag-footer span {
+  font-weight: 400;
+  font-style: italic;
+}
+@media print {
+  #tags-preview {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 16px !important;
+  }
+  .tag-card { border: 2px solid #000 !important; }
+}
+
 </style>
 </head>
 <body>
@@ -395,6 +478,9 @@ select option { background: var(--surface2); }
     </div>
     <div class="nav-item" onclick="showPage('qr')">
       <span class="nav-icon">📱</span> QR-заявка
+    </div>
+    <div class="nav-item" onclick="showPage('tags')">
+      <span class="nav-icon">🏷️</span> Бірки
     </div>
     <div class="nav-sect">Система</div>
     <div class="nav-item" onclick="showPage('quarantine')">
@@ -745,6 +831,74 @@ select option { background: var(--surface2); }
     </div>
 
     <!-- BACKUP -->
+    <div class="page" id="page-tags">
+      <div style="padding:24px;max-width:1100px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+          <h2 style="margin:0;font-size:18px">🏷️ Бірки (AMO-CiV-F.0018)</h2>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary no-print" onclick="printTags()">🖨️ Друкувати бірки</button>
+          </div>
+        </div>
+
+        <!-- Вибір актів -->
+        <div class="no-print" style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:20px;margin-bottom:24px">
+          <div style="font-size:14px;font-weight:600;margin-bottom:12px">Оберіть акти ВК (до 4-х):</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px" id="tag-act-selectors">
+            <div class="tag-act-slot" id="tag-slot-0">
+              <select class="tag-act-select" onchange="onTagActSelect(0,this.value)" style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px">
+                <option value="">— Акт 1 —</option>
+              </select>
+            </div>
+            <div class="tag-act-slot" id="tag-slot-1">
+              <select class="tag-act-select" onchange="onTagActSelect(1,this.value)" style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px">
+                <option value="">— Акт 2 —</option>
+              </select>
+            </div>
+            <div class="tag-act-slot" id="tag-slot-2">
+              <select class="tag-act-select" onchange="onTagActSelect(2,this.value)" style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px">
+                <option value="">— Акт 3 —</option>
+              </select>
+            </div>
+            <div class="tag-act-slot" id="tag-slot-3">
+              <select class="tag-act-select" onchange="onTagActSelect(3,this.value)" style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px">
+                <option value="">— Акт 4 —</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Бірки для відображення -->
+        <div id="tags-preview" style="display:grid;grid-template-columns:repeat(2,1fr);gap:24px"></div>
+      </div>
+
+      <!-- Модал редагування бірки -->
+      <div class="modal" id="modal-tag-edit" style="display:none">
+        <div class="modal-overlay" onclick="closeModal('modal-tag-edit')"></div>
+        <div class="modal-box" style="max-width:480px">
+          <div class="modal-header">
+            <span>✏️ Редагувати бірку</span>
+            <button class="modal-close" onclick="closeModal('modal-tag-edit')">✕</button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="tag-edit-idx">
+            <div class="form-group"><label>Item Name / Найменування</label><input type="text" id="tag-edit-name" class="form-control"></div>
+            <div class="form-group"><label>Part Number / Номенклатура</label><input type="text" id="tag-edit-pn" class="form-control"></div>
+            <div class="form-group"><label>Serial Number / Заводський №</label><input type="text" id="tag-edit-sn" class="form-control"></div>
+            <div class="form-group"><label>Quantity / Кількість</label><input type="text" id="tag-edit-qty" class="form-control"></div>
+            <div class="form-group"><label>Acceptance Certificate / Акт ВК</label><input type="text" id="tag-edit-act" class="form-control"></div>
+            <div class="form-group"><label>Supplier/Customer / Постачальник</label><input type="text" id="tag-edit-supplier" class="form-control"></div>
+            <div class="form-group"><label>Serviceable Until / Придатний до</label><input type="text" id="tag-edit-until" class="form-control" placeholder="необов'язково"></div>
+            <div class="form-group"><label>Name/Signature / Прізвище/підпис</label><input type="text" id="tag-edit-inspector" class="form-control"></div>
+            <div class="form-group"><label>Date / Дата</label><input type="date" id="tag-edit-date" class="form-control"></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="closeModal('modal-tag-edit')">Скасувати</button>
+            <button class="btn btn-primary" onclick="saveTagEdit()">✅ Зберегти</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="page" id="page-backup">
       <div class="card">
         <div class="card-hdr">
@@ -2130,7 +2284,7 @@ function showPage(name) {
     dashboard:'Дашборд', inventory:'Склад — Інвентар', requests:'Заявки',
     issuance:'Журнал видач', acts:'Реєстр актів ВК',
     tools:'Інструмент та обладнання', measuring:'Вимірювальний інструмент',
-    qr:'QR-заявка', backup:'Резервне копіювання'
+    qr:'QR-заявка', tags:'Бірки', backup:'Резервне копіювання'
   };
   document.getElementById('topbar-title').textContent = navMap[name] || '';
   document.querySelectorAll('.nav-item').forEach(n => {
@@ -2144,6 +2298,7 @@ function showPage(name) {
   if (name==='tools') renderTools();
   if (name==='measuring') renderMeasuring();
   if (name==='qr') renderQR();
+  if (name==='tags') renderTags();
   if (name==='backup') renderBackupStats();
   if (name==='quarantine') renderQuarantine();
   if (window.innerWidth < 769) document.getElementById('sidebar').classList.remove('open');
@@ -4177,6 +4332,156 @@ async function submitMobileManual() {
   renderMobileForm('success');
   loadDashboard();
   showNotif('Нова заявка з QR!','info');
+}
+
+
+// ===================== БІРКИ =====================
+let tagData = [null, null, null, null];
+
+async function renderTags() {
+  const acts = await dbGetAll('acts');
+  const selects = document.querySelectorAll('.tag-act-select');
+  selects.forEach(sel => {
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">— Оберіть акт —</option>';
+    [...acts]
+      .sort((a,b) => (b.actNum||'').localeCompare(a.actNum||''))
+      .forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a.actNum;
+        opt.textContent = a.actNum + (a.name ? ' — ' + a.name.slice(0,30) : '');
+        if (a.actNum === cur) opt.selected = true;
+        sel.appendChild(opt);
+      });
+  });
+  renderTagsPreview();
+}
+
+async function onTagActSelect(idx, actNum) {
+  if (!actNum) { tagData[idx] = null; renderTagsPreview(); return; }
+  const acts = await dbGetAll('acts');
+  const act = acts.find(a => a.actNum === actNum);
+  if (!act) return;
+  tagData[idx] = {
+    name: act.name || '',
+    pn: act.pn || '—',
+    sn: act.sn || '—',
+    qty: (act.qty || '') + ' ' + (act.unit || 'шт'),
+    act: act.actNum || '',
+    supplier: act.supplier || '',
+    until: '',
+    inspector: act.inspector || '',
+    date: (act.date || '').slice(0, 10)
+  };
+  renderTagsPreview();
+}
+
+function renderTagsPreview() {
+  const container = document.getElementById('tags-preview');
+  if (!container) return;
+  const active = tagData.filter(Boolean);
+  if (!active.length) {
+    container.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text2);padding:40px">Оберіть акти ВК щоб побачити бірки</div>';
+    return;
+  }
+  container.innerHTML = tagData.map((t, i) => t ? renderTagCard(t, i) : '').join('');
+}
+
+function renderTagCard(t, idx) {
+  return `<div class="tag-card">
+    <div class="tag-header">
+      <div class="tag-header-cell">«AVRONIS FZE»</div>
+      <div class="tag-header-cell">
+        «SERVICEABLE/FIT FOR USE»<br>
+        <span style="font-weight:400;font-style:italic;font-size:11px">(«СПРАВНИЙ/ПРИДАТНИЙ»)</span>
+      </div>
+      <div class="tag-header-cell green">
+        <div>GREEN</div>
+        <div class="green-label">(зелений)</div>
+      </div>
+    </div>
+    <div class="tag-row">
+      <div class="tag-label"><b>Item Name</b><span>(Найменування)</span></div>
+      <div class="tag-value">${t.name}</div>
+    </div>
+    <div class="tag-row">
+      <div class="tag-label"><b>Part Number</b><span>(Номенклатура)</span></div>
+      <div class="tag-value">${t.pn}</div>
+    </div>
+    <div class="tag-row">
+      <div class="tag-label"><b>Serial Number</b><span>(Заводський №)</span></div>
+      <div class="tag-value">${t.sn}</div>
+    </div>
+    <div class="tag-row">
+      <div class="tag-label"><b>Quantity</b><span>(Кількість)</span></div>
+      <div class="tag-value">${t.qty}</div>
+    </div>
+    <div class="tag-row">
+      <div class="tag-label"><b>Acceptance Certificate/<br>Reference</b><span>(Акт ВК/Підстава)</span></div>
+      <div class="tag-value">${t.act}</div>
+    </div>
+    <div class="tag-row">
+      <div class="tag-label"><b>Supplier/Customer</b><span>(Постачальник/Замовник)</span></div>
+      <div class="tag-value">${t.supplier}</div>
+    </div>
+    <div class="tag-row">
+      <div class="tag-label"><b>Serviceable Until:</b><span>(Придатний до)</span></div>
+      <div class="tag-value">${t.until || ''}</div>
+    </div>
+    <div class="tag-row">
+      <div class="tag-label"><b>Name/Signature</b><span>(Прізвище/підпис)</span></div>
+      <div class="tag-value">${t.inspector}</div>
+    </div>
+    <div class="tag-row">
+      <div class="tag-label"><b>Date</b><span>(Дата)</span></div>
+      <div class="tag-value">${t.date}</div>
+    </div>
+    <div class="tag-footer">
+      AMO-CiV-F.0018 <b>Additional information on reverse side:</b>
+      <span>(Додаткова штформація на звороті)</span>
+      <button class="btn btn-ghost btn-sm no-print" style="margin-left:12px;font-size:11px" onclick="openTagEdit(${idx})">✏️ Редагувати</button>
+    </div>
+  </div>`;
+}
+
+function openTagEdit(idx) {
+  const t = tagData[idx];
+  if (!t) return;
+  document.getElementById('tag-edit-idx').value = idx;
+  document.getElementById('tag-edit-name').value = t.name;
+  document.getElementById('tag-edit-pn').value = t.pn;
+  document.getElementById('tag-edit-sn').value = t.sn;
+  document.getElementById('tag-edit-qty').value = t.qty;
+  document.getElementById('tag-edit-act').value = t.act;
+  document.getElementById('tag-edit-supplier').value = t.supplier;
+  document.getElementById('tag-edit-until').value = t.until || '';
+  document.getElementById('tag-edit-inspector').value = t.inspector;
+  document.getElementById('tag-edit-date').value = t.date;
+  openModal('modal-tag-edit');
+}
+
+function saveTagEdit() {
+  const idx = parseInt(document.getElementById('tag-edit-idx').value);
+  if (isNaN(idx) || !tagData[idx]) return;
+  tagData[idx] = {
+    name: document.getElementById('tag-edit-name').value,
+    pn: document.getElementById('tag-edit-pn').value,
+    sn: document.getElementById('tag-edit-sn').value,
+    qty: document.getElementById('tag-edit-qty').value,
+    act: document.getElementById('tag-edit-act').value,
+    supplier: document.getElementById('tag-edit-supplier').value,
+    until: document.getElementById('tag-edit-until').value,
+    inspector: document.getElementById('tag-edit-inspector').value,
+    date: document.getElementById('tag-edit-date').value,
+  };
+  closeModal('modal-tag-edit');
+  renderTagsPreview();
+}
+
+function printTags() {
+  const active = tagData.filter(Boolean);
+  if (!active.length) { showNotif('Оберіть хоча б один акт', 'err'); return; }
+  window.print();
 }
 
 // ===================== BACKUP =====================
