@@ -4621,7 +4621,7 @@ async function onTagActSelect(idx, actNum) {
     name: act.name || '',
     pn: act.pn || '—',
     sn: act.sn || '—',
-    qty: (act.qty || '') + ' ' + (act.unit || 'шт'),
+    qty: String(act.qty || '').trim() + (act.unit && !String(act.qty||'').includes(act.unit) ? ' ' + act.unit : ''),
     act: act.actNum || '',
     supplier: act.supplier || '',
     until: '',
