@@ -4330,6 +4330,17 @@ function downloadMobileFile() {
   showNotif('Файл AVRONIS-mobile.html вже є серед завантажених файлів', 'info');
 }
 
+function downloadQR() {
+  const box = document.getElementById('qr-box');
+  if (!box) return;
+  const canvas = box.querySelector('canvas');
+  if (!canvas) { showNotif('Спочатку згенеруйте QR', 'err'); return; }
+  const a = document.createElement('a');
+  a.download = 'avronis-qr.png';
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+
 function copyQRLink() {
   const url = document.getElementById('qr-url-display').value;
   navigator.clipboard?.writeText(url).then(() => showNotif('Посилання скопійовано')).catch(() => {
