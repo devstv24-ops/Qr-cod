@@ -2743,7 +2743,7 @@ async function renderRequests() {
         <div style="max-height:160px;overflow-y:auto">
         ${(r.items||[]).map((it,i)=>`
           <div class="req-part-row">
-            <span>${i+1}. ${it.name}${it.pn?' <span class="td-mono" style="color:var(--text2)">['+it.pn+']</span>':''}</span>
+            <span>${i+1}. ${it.name||it.pn||'—'}${(it.pn&&it.name&&it.name!=='undefined')?' <span class="td-mono" style="color:var(--text2)">['+it.pn+']</span>':''}</span>
             <span style="font-weight:600">${it.qty} ${it.unit||'шт'}</span>
           </div>`).join('')}
         </div>
@@ -2898,7 +2898,7 @@ function showReqReview(title) {
     ${exec?`👷 ${exec} &nbsp;`:''}${agg?`⚙️ ${agg} &nbsp;`:''}${proj?`📁 ${proj} &nbsp;`:''}${wp?`🏭 ${wp}`:''}`;
   const tbody = document.getElementById('req-review-tbody');
   tbody.innerHTML = tempRequestItems.map((it,i)=>`
-    <tr><td>${i+1}</td><td class="td-mono">${it.pn||'—'}</td><td>${it.name}</td><td>${it.qty}</td><td>${it.unit||'шт'}</td></tr>`).join('');
+    <tr><td>${i+1}</td><td class="td-mono">${it.pn||'—'}</td><td>${it.name||it.pn||'—'}</td><td>${it.qty||''}</td><td>${it.unit||'шт'}</td></tr>`).join('');
   showReqStep('req-step-review');
   document.getElementById('req-submit-btn').style.display = '';
 }
@@ -4444,7 +4444,12 @@ async function submitMobileKit(kitKey) {
   const req = {
     executor: exec, aggregate: agg||kit.label, project: proj,
     workplace: wp + (area ? ' / ' + area : ''),
-    items: kit.items.map(i=>({...i})), status: 'new', createdAt: now(),
+    items: kit.items.map(i=>({
+      name: i.name || i.n || '',
+      pn: i.pn || '',
+      qty: i.qty || i.q || 1,
+      unit: i.unit || i.u || 'шт'
+    })), status: 'new', createdAt: now(),
     note: `Комплект 100% заміни ${kit.label} (з QR)`
   };
   const newId = await dbAdd('requests', req);
