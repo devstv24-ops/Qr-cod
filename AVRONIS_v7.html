@@ -3077,7 +3077,7 @@ async function openConfirmIssue(reqId) {
           onchange="toggleIssueRow(this)" style="width:16px;height:16px;accent-color:var(--accent)">
       </td>
       <td class="td-mono" style="font-size:11px">${it.pn||'—'}</td>
-      <td>${it.name}</td>
+      <td>${it.name||it._selName||'—'}</td>
       <td style="text-align:center">
         <input type="number" class="issue-qty-input" data-idx="${idx}"
           value="${parseFloat(String(it.qty||'1').replace(/[^0-9.,]/g,'').replace(',','.')) || 1}" min="0.001" step="0.001"
@@ -3317,7 +3317,7 @@ async function confirmIssue() {
       reqId: req.id, reqNum: journalReqNum,
       aggregate: req.aggregate, project: req.project,
       pn: invItem ? (invItem.pn || it.pn) : it.pn,
-      name: invItem ? (invItem.name || it.name) : it.name,
+      name: invItem ? (invItem.name || it.name || it._selName || '') : (it.name || it._selName || ''),
       qty: it.qty, unit: it._selUnit || it.unit||'шт',
       executor: req.executor, storekeeper, workplace: req.workplace,
       category: invItem ? (invItem.category || it.category || '') : (it.category || ''),
