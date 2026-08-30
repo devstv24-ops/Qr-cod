@@ -354,89 +354,6 @@ select option { background: var(--surface2); }
 .act-preview { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
 .act-preview table { font-size: 12px; }
 .act-preview th, .act-preview td { border: 1px solid var(--border); padding: 6px 8px; }
-
-/* === БІРКИ === */
-.tag-card {
-  border: 2px solid #000;
-  font-family: Arial, sans-serif;
-  background: #fff;
-  color: #000;
-  page-break-inside: avoid;
-}
-.tag-header {
-  display: grid;
-  grid-template-columns: 1fr 2fr 80px;
-  border-bottom: 2px solid #000;
-}
-.tag-header-cell {
-  padding: 10px 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  font-weight: 700;
-  font-size: 13px;
-  line-height: 1.3;
-}
-.tag-header-cell:not(:last-child) {
-  border-right: 2px solid #000;
-}
-.tag-header-cell.green {
-  background: #4CAF50;
-  color: #fff;
-  flex-direction: column;
-}
-.tag-header-cell.green .green-label {
-  font-size: 11px;
-  font-weight: 400;
-  font-style: italic;
-}
-.tag-row {
-  display: grid;
-  grid-template-columns: 180px 1fr;
-  border-bottom: 1px solid #000;
-  min-height: 32px;
-}
-.tag-row:last-child { border-bottom: none; }
-.tag-label {
-  padding: 5px 8px;
-  border-right: 2px solid #000;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.3;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-.tag-label span {
-  font-weight: 400;
-  font-style: italic;
-}
-.tag-value {
-  padding: 5px 8px;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-}
-.tag-footer {
-  padding: 5px 8px;
-  font-size: 10px;
-  font-weight: 700;
-  border-top: 2px solid #000;
-}
-.tag-footer span {
-  font-weight: 400;
-  font-style: italic;
-}
-@media print {
-  #tags-preview {
-    display: grid !important;
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 16px !important;
-  }
-  .tag-card { border: 2px solid #000 !important; }
-}
-
 </style>
 </head>
 <body>
@@ -478,9 +395,6 @@ select option { background: var(--surface2); }
     </div>
     <div class="nav-item" onclick="showPage('qr')">
       <span class="nav-icon">📱</span> QR-заявка
-    </div>
-    <div class="nav-item" onclick="showPage('tags')">
-      <span class="nav-icon">🏷️</span> Бірки
     </div>
     <div class="nav-sect">Система</div>
     <div class="nav-item" onclick="showPage('quarantine')">
@@ -831,97 +745,6 @@ select option { background: var(--surface2); }
     </div>
 
     <!-- BACKUP -->
-    <div class="page" id="page-tags">
-      <div style="padding:24px;max-width:1100px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-          <h2 style="margin:0;font-size:18px">🏷️ Бірки (AMO-CiV-F.0018)</h2>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-primary no-print" onclick="printTags()">🖨️ Друкувати бірки</button>
-          </div>
-        </div>
-
-        <!-- Вибір актів -->
-        <div class="no-print" style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:20px;margin-bottom:24px">
-          <!-- Перемикач режиму -->
-          <div style="display:flex;gap:8px;margin-bottom:16px">
-            <button id="tag-mode-act" class="btn btn-primary btn-sm" onclick="setTagMode('act')">📋 З акту ВК</button>
-            <button id="tag-mode-req" class="btn btn-ghost btn-sm" onclick="setTagMode('req')">📋 З журналу видачі</button>
-          </div>
-
-          <!-- Режим: акти ВК -->
-          <div id="tag-panel-act">
-            <div style="font-size:14px;font-weight:600;margin-bottom:12px">Оберіть акти ВК (до 4-х):</div>
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px" id="tag-act-selectors">
-            <div class="tag-act-slot" id="tag-slot-0">
-              <select class="tag-act-select" onchange="onTagActSelect(0,this.value)" style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px">
-                <option value="">— Акт 1 —</option>
-              </select>
-            </div>
-            <div class="tag-act-slot" id="tag-slot-1">
-              <select class="tag-act-select" onchange="onTagActSelect(1,this.value)" style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px">
-                <option value="">— Акт 2 —</option>
-              </select>
-            </div>
-            <div class="tag-act-slot" id="tag-slot-2">
-              <select class="tag-act-select" onchange="onTagActSelect(2,this.value)" style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px">
-                <option value="">— Акт 3 —</option>
-              </select>
-            </div>
-            <div class="tag-act-slot" id="tag-slot-3">
-              <select class="tag-act-select" onchange="onTagActSelect(3,this.value)" style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px">
-                <option value="">— Акт 4 —</option>
-              </select>
-            </div>
-          </div>
-          </div><!-- /tag-panel-act -->
-
-          <!-- Режим: заявки -->
-          <div id="tag-panel-req" style="display:none">
-            <div style="font-size:14px;font-weight:600;margin-bottom:12px">Оберіть заявку з журналу видачі:</div>
-            <select id="tag-req-select" onchange="onTagReqSelect(this.value)" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px">
-              <option value="">— Оберіть заявку —</option>
-            </select>
-            <div id="tag-req-info" style="margin-top:12px;font-size:12px;color:var(--text2)"></div>
-            <div id="tag-req-date-row" style="display:none;margin-top:12px;display:flex;align-items:center;gap:12px">
-              <label style="font-size:13px;font-weight:600">Дата на бірках:</label>
-              <input type="date" id="tag-req-date" style="padding:6px 10px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px" onchange="updateTagDates(this.value)">
-            </div>
-          </div>
-
-        </div>
-
-        <!-- Бірки для відображення -->
-        <div id="tags-preview" style="display:grid;grid-template-columns:repeat(2,1fr);gap:24px"></div>
-      </div>
-
-      <!-- Модал редагування бірки -->
-      <div class="modal" id="modal-tag-edit" style="display:none">
-        <div class="modal-overlay" onclick="closeModal('modal-tag-edit')"></div>
-        <div class="modal-box" style="max-width:480px">
-          <div class="modal-header">
-            <span>✏️ Редагувати бірку</span>
-            <button class="modal-close" onclick="closeModal('modal-tag-edit')">✕</button>
-          </div>
-          <div class="modal-body">
-            <input type="hidden" id="tag-edit-idx">
-            <div class="form-group"><label>Item Name / Найменування</label><input type="text" id="tag-edit-name" class="form-control"></div>
-            <div class="form-group"><label>Part Number / Номенклатура</label><input type="text" id="tag-edit-pn" class="form-control"></div>
-            <div class="form-group"><label>Serial Number / Заводський №</label><input type="text" id="tag-edit-sn" class="form-control"></div>
-            <div class="form-group"><label>Quantity / Кількість</label><input type="text" id="tag-edit-qty" class="form-control"></div>
-            <div class="form-group"><label>Acceptance Certificate / Акт ВК</label><input type="text" id="tag-edit-act" class="form-control"></div>
-            <div class="form-group"><label>Supplier/Customer / Постачальник</label><input type="text" id="tag-edit-supplier" class="form-control"></div>
-            <div class="form-group"><label>Serviceable Until / Придатний до</label><input type="text" id="tag-edit-until" class="form-control" placeholder="необов'язково"></div>
-            <div class="form-group"><label>Name/Signature / Прізвище/підпис</label><input type="text" id="tag-edit-inspector" class="form-control"></div>
-            <div class="form-group"><label>Date / Дата</label><input type="date" id="tag-edit-date" class="form-control"></div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-ghost" onclick="closeModal('modal-tag-edit')">Скасувати</button>
-            <button class="btn btn-primary" onclick="saveTagEdit()">✅ Зберегти</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <div class="page" id="page-backup">
       <div class="card">
         <div class="card-hdr">
@@ -933,7 +756,7 @@ select option { background: var(--surface2); }
         <div class="btn-group" style="margin-bottom:16px">
           <button class="btn btn-success" onclick="exportBackup()">📥 Зберегти резервну копію (JSON)</button>
           <button class="btn btn-warn" onclick="document.getElementById('import-file').click()">📤 Відновити з копії</button>
-          <input type="file" id="import-file" accept=".json" style="display:none" onchange="importBackupFromInput(this)">
+          <input type="file" id="import-file" accept=".json" style="display:none" onchange="importBackup(this)">
           <button class="btn btn-primary" onclick="syncActsToInventory().then(()=>{renderBackupStats();loadDashboard();})">🔄 Синхронізувати акти → склад</button>
           <button class="btn btn-warn" onclick="reloadActsFromPreloaded()">♻️ Перезавантажити реєстр актів</button>
           <button class="btn btn-ghost" onclick="fixJournalPns()" title="Виправити pn в старих записах журналу щоб збіглись зі складом">🔧 Виправити pn в журналі</button>
@@ -1658,7 +1481,7 @@ async function sendToSheets(req) {
       mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        reqId: req.reqNum || 'ЗАМ-' + String(req.id || Date.now()).padStart(4,'0'),
+        reqId: 'ЗАМ-' + String(req.id || Date.now()).padStart(4,'0'),
         executor: req.executor || '',
         aggregate: req.aggregate || '',
         project: req.project || '',
@@ -1717,17 +1540,15 @@ async function syncRequestsFromGoogle() {
     const existing = await dbGetAll('requests');
     const existingIds = new Set(existing.map(r => r.googleRowId).filter(Boolean));
     const deletedIds = new Set(JSON.parse(localStorage.getItem('deletedRequestIds') || '[]'));
-    // Захист від дублів по createdAt+executor якщо немає googleRowId
     const existingFingerprints = new Set(existing.map(r => (r.createdAt||'')+'|'+(r.executor||'')));
 
     let added = 0;
     for (const row of data.requests) {
       if (row.googleRowId && existingIds.has(row.googleRowId)) continue;
       if (row.googleRowId && deletedIds.has(row.googleRowId)) continue;
-      if (!row.executor && !row.aggregate && !(row.items && row.items.length)) continue;
-      // Перевіряємо fingerprint щоб не дублювати якщо немає googleRowId
       const fp = (row.createdAt||'') + '|' + (row.executor||'');
-      if (!row.googleRowId && existingFingerprints.has(fp)) continue;
+      if (!row.googleRowId && existingFingerprints.has(fp)) continue; // видалена — не повертати
+      if (!row.executor && !row.aggregate && !(row.items && row.items.length)) continue;
       await dbAdd('requests', {
         executor: row.executor || '',
         aggregate: row.aggregate || '',
@@ -1740,7 +1561,6 @@ async function syncRequestsFromGoogle() {
         googleRowId: row.googleRowId || null,
         source: 'mobile'
       });
-      existingFingerprints.add(fp);
       added++;
     }
 
@@ -2185,125 +2005,6 @@ function initDB() {
   });
 }
 
-
-async function exportBackup() {
-  try {
-    const get = s => {
-      if (!db.objectStoreNames.contains(s)) return Promise.resolve([]);
-      return new Promise(r=>{const q=db.transaction(s).objectStore(s).getAll();q.onsuccess=e=>r(e.target.result);q.onerror=()=>r([]);});
-    };
-    const data = {
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      inventory: await get('inventory'),
-      journal: await get('journal'),
-      requests: await get('requests'),
-      acts: await get('acts'),
-      tools_edits: await get('tools_edits'),
-      meas_edits: await get('meas_edits'),
-      quarantine: await get('quarantine'),
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'avronis_backup_' + new Date().toISOString().slice(0,10) + '.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    showNotif('✅ Резервну копію збережено');
-  } catch(e) {
-    showNotif('❌ Помилка збереження: ' + e.message, 'err');
-  }
-}
-
-async function importBackupFromInput(input) {
-  const file = input?.files?.[0];
-  if (!file) return;
-  try {
-    const text = await file.text();
-    const d = JSON.parse(text);
-    const restore = async (storeName, items, filterFn) => {
-      if (!items?.length) return;
-      const real = filterFn ? items.filter(filterFn) : items;
-      if (!real.length) return;
-      if (!db.objectStoreNames.contains(storeName)) return;
-      const tx = db.transaction(storeName,'readwrite');
-      const s = tx.objectStore(storeName);
-      s.clear();
-      for (const item of real) { const c={...item}; delete c.id; s.add(c); }
-      await new Promise(r=>tx.oncomplete=r);
-    };
-    await restore('inventory', d.inventory, i=>i.name);
-    await restore('journal', d.journal, j=>j.name||j.pn);
-    await restore('acts', d.acts, a=>a.actNum);
-    await restore('requests', d.requests, r=>r.executor||r.aggregate||(r.items&&r.items.length>0));
-    await restore('tools_edits', d.tools_edits);
-    await restore('meas_edits', d.meas_edits);
-    await restore('quarantine', d.quarantine);
-    showNotif('✅ Дані відновлено з копії');
-    setTimeout(()=>location.reload(), 1000);
-  } catch(e) {
-    showNotif('❌ Помилка: ' + e.message, 'err');
-  }
-}
-
-async function importBackup() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.json';
-  input.onchange = async (e) => {
-    try {
-      const text = await e.target.files[0].text();
-      const d = JSON.parse(text);
-      const restore = async (storeName, items, filterFn) => {
-        if (!items?.length) return;
-        const real = filterFn ? items.filter(filterFn) : items;
-        if (!real.length) return;
-        if (!db.objectStoreNames.contains(storeName)) return;
-        const tx = db.transaction(storeName,'readwrite');
-        const s = tx.objectStore(storeName);
-        s.clear();
-        for (const item of real) { const c={...item}; delete c.id; s.add(c); }
-        await new Promise(r=>tx.oncomplete=r);
-        console.log('✅', storeName, real.length);
-      };
-      await restore('inventory', d.inventory, i=>i.name);
-      await restore('journal', d.journal, j=>j.name||j.pn);
-      await restore('acts', d.acts, a=>a.actNum);
-      await restore('requests', d.requests, r=>r.id||r.executor||r.aggregate);
-      await restore('tools_edits', d.tools_edits);
-      await restore('meas_edits', d.meas_edits);
-      await restore('quarantine', d.quarantine);
-      showNotif('✅ Дані відновлено з копії');
-      setTimeout(()=>location.reload(), 1000);
-    } catch(e) {
-      showNotif('❌ Помилка відновлення: ' + e.message, 'err');
-    }
-  };
-  input.click();
-}
-
-async function renderBackupStats() {
-  const statsEl = document.getElementById('backup-stats');
-  if (!statsEl) return;
-  try {
-    const get = s => {
-      if (!db.objectStoreNames.contains(s)) return Promise.resolve([]);
-      return new Promise(r=>{const q=db.transaction(s).objectStore(s).getAll();q.onsuccess=e=>r(e.target.result);q.onerror=()=>r([]);});
-    };
-    const [inv, journal, reqs, acts] = await Promise.all([
-      get('inventory'), get('journal'), get('requests'), get('acts')
-    ]);
-    statsEl.innerHTML =
-      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px">' +
-      '<div style="background:var(--surface2);padding:12px;border-radius:8px;text-align:center"><div style="font-size:24px;font-weight:700">' + inv.filter(i=>i.name).length + '</div><div style="font-size:12px;color:var(--text2)">Інвентар</div></div>' +
-      '<div style="background:var(--surface2);padding:12px;border-radius:8px;text-align:center"><div style="font-size:24px;font-weight:700">' + journal.filter(j=>j.name||j.pn).length + '</div><div style="font-size:12px;color:var(--text2)">Журнал видач</div></div>' +
-      '<div style="background:var(--surface2);padding:12px;border-radius:8px;text-align:center"><div style="font-size:24px;font-weight:700">' + reqs.length + '</div><div style="font-size:12px;color:var(--text2)">Заявки</div></div>' +
-      '<div style="background:var(--surface2);padding:12px;border-radius:8px;text-align:center"><div style="font-size:24px;font-weight:700">' + acts.length + '</div><div style="font-size:12px;color:var(--text2)">Акти ВК</div></div>' +
-      '</div>';
-  } catch(e) { if(statsEl) statsEl.innerHTML = ''; }
-}
-
 // Stores які потребують автобекапу після кожного запису
 const BACKUP_STORES = new Set(['inventory','journal','acts','requests','tools_edits','meas_edits']);
 let _backupTimer = null;
@@ -2312,22 +2013,12 @@ function scheduleBackup() {
   _backupTimer = setTimeout(() => { autoBackupToSheets(); _backupTimer = null; }, 3000);
 }
 
-async function ensureItemsArray(req) {
-  if (!Array.isArray(req.items)) {
-    try { req.items = JSON.parse(req.itemsJson || '[]'); } catch(e) { req.items = []; }
-  }
-  return req;
-}
-
 function dbGetAll(store) {
   return new Promise((res,rej)=>{
-    try {
-      if (!db.objectStoreNames.contains(store)) { res([]); return; }
-      const tx = db.transaction(store,'readonly');
-      const req = tx.objectStore(store).getAll();
-      req.onsuccess = ()=>res(req.result);
-      req.onerror = ()=>rej(req.error);
-    } catch(e) { res([]); }
+    const tx = db.transaction(store,'readonly');
+    const req = tx.objectStore(store).getAll();
+    req.onsuccess = ()=>res(req.result);
+    req.onerror = ()=>rej(req.error);
   });
 }
 function dbGet(store,id) {
@@ -2426,7 +2117,7 @@ function showPage(name) {
     dashboard:'Дашборд', inventory:'Склад — Інвентар', requests:'Заявки',
     issuance:'Журнал видач', acts:'Реєстр актів ВК',
     tools:'Інструмент та обладнання', measuring:'Вимірювальний інструмент',
-    qr:'QR-заявка', tags:'Бірки', backup:'Резервне копіювання'
+    qr:'QR-заявка', backup:'Резервне копіювання'
   };
   document.getElementById('topbar-title').textContent = navMap[name] || '';
   document.querySelectorAll('.nav-item').forEach(n => {
@@ -2440,7 +2131,6 @@ function showPage(name) {
   if (name==='tools') renderTools();
   if (name==='measuring') renderMeasuring();
   if (name==='qr') renderQR();
-  if (name==='tags') renderTags();
   if (name==='backup') renderBackupStats();
   if (name==='quarantine') renderQuarantine();
   if (window.innerWidth < 769) document.getElementById('sidebar').classList.remove('open');
@@ -2710,14 +2400,6 @@ function filterActsTo(actNum) {
 
 // ===================== REQUESTS =====================
 async function renderRequests() {
-  // Гарантуємо що всі заявки мають items як масив
-  const allReqs = await dbGetAll('requests');
-  for (const r of allReqs) {
-    if (!Array.isArray(r.items)) {
-      r.items = (() => { try { return JSON.parse(r.itemsJson||'[]'); } catch(e) { return []; } })();
-      try { await dbPut('requests', r); } catch(e) {}
-    }
-  }
   const reqs = await dbGetAll('requests');
   let filtered = reqs;
   if (currentReqFilter !== 'all') filtered = reqs.filter(r=>r.status===currentReqFilter);
@@ -2743,7 +2425,7 @@ async function renderRequests() {
         <div style="max-height:160px;overflow-y:auto">
         ${(r.items||[]).map((it,i)=>`
           <div class="req-part-row">
-            <span>${i+1}. ${it.name||it.pn||'—'}${(it.pn&&it.name&&it.name!=='undefined')?' <span class="td-mono" style="color:var(--text2)">['+it.pn+']</span>':''}</span>
+            <span>${i+1}. ${it.name}${it.pn?' <span class="td-mono" style="color:var(--text2)">['+it.pn+']</span>':''}</span>
             <span style="font-weight:600">${it.qty} ${it.unit||'шт'}</span>
           </div>`).join('')}
         </div>
@@ -2898,7 +2580,7 @@ function showReqReview(title) {
     ${exec?`👷 ${exec} &nbsp;`:''}${agg?`⚙️ ${agg} &nbsp;`:''}${proj?`📁 ${proj} &nbsp;`:''}${wp?`🏭 ${wp}`:''}`;
   const tbody = document.getElementById('req-review-tbody');
   tbody.innerHTML = tempRequestItems.map((it,i)=>`
-    <tr><td>${i+1}</td><td class="td-mono">${it.pn||'—'}</td><td>${it.name||it.pn||'—'}</td><td>${it.qty||''}</td><td>${it.unit||'шт'}</td></tr>`).join('');
+    <tr><td>${i+1}</td><td class="td-mono">${it.pn||'—'}</td><td>${it.name}</td><td>${it.qty}</td><td>${it.unit||'шт'}</td></tr>`).join('');
   showReqStep('req-step-review');
   document.getElementById('req-submit-btn').style.display = '';
 }
@@ -3077,7 +2759,7 @@ async function openConfirmIssue(reqId) {
           onchange="toggleIssueRow(this)" style="width:16px;height:16px;accent-color:var(--accent)">
       </td>
       <td class="td-mono" style="font-size:11px">${it.pn||'—'}</td>
-      <td>${it.name||it._selName||'—'}</td>
+      <td>${it.name}</td>
       <td style="text-align:center">
         <input type="number" class="issue-qty-input" data-idx="${idx}"
           value="${parseFloat(String(it.qty||'1').replace(/[^0-9.,]/g,'').replace(',','.')) || 1}" min="0.001" step="0.001"
@@ -3317,7 +2999,7 @@ async function confirmIssue() {
       reqId: req.id, reqNum: journalReqNum,
       aggregate: req.aggregate, project: req.project,
       pn: invItem ? (invItem.pn || it.pn) : it.pn,
-      name: invItem ? (invItem.name || it.name || it._selName || '') : (it.name || it._selName || ''),
+      name: invItem ? (invItem.name || it.name) : it.name,
       qty: it.qty, unit: it._selUnit || it.unit||'шт',
       executor: req.executor, storekeeper, workplace: req.workplace,
       category: invItem ? (invItem.category || it.category || '') : (it.category || ''),
@@ -4169,7 +3851,7 @@ async function printAct(id) {
     <td style="${SB}width:30px">№</td>
     <td style="${S}width:90px"><strong>${actN}</strong></td>
     <td style="${SB}width:50px">Date:<br><em style="font-weight:normal;font-size:9px">(дата)</em></td>
-    <td style="${S}width:90px">${(a.date||'').slice(0,10)}</td>
+    <td style="${S}width:90px">${a.date||''}</td>
     <td style="${SB}width:100px;font-size:9px">AMO-CiV-F.0015</td>
   </tr>
   <tr><td colspan="8" style="${SH}">I. Compliance Check Against Purchase Order<br><em style="font-weight:normal">(перевірка відповідності замовленню)</em></td></tr>
@@ -4454,9 +4136,7 @@ async function submitMobileKit(kitKey) {
   };
   const newId = await dbAdd('requests', req);
   req.id = newId;
-  req.reqNum = 'ЗАМ-' + String(newId).padStart(4,'0');
-  await dbPut('requests', req);
-  sendToSheets(req);
+  sendToSheets(req); // синхронізація з Google Sheets
   renderMobileForm('success');
   loadDashboard();
   showNotif('Нова заявка з QR!','info');
@@ -4484,374 +4164,63 @@ async function submitMobileManual() {
   const req = {executor:exec, aggregate:agg, project:proj, items, status:'new', createdAt:now(), note:'Ручне введення з QR'};
   const newId = await dbAdd('requests', req);
   req.id = newId;
-  req.reqNum = 'ЗАМ-' + String(newId).padStart(4,'0');
-  await dbPut('requests', req);
-  sendToSheets(req);
+  sendToSheets(req); // синхронізація з Google Sheets
   renderMobileForm('success');
   loadDashboard();
   showNotif('Нова заявка з QR!','info');
 }
 
+// ===================== BACKUP =====================
+async function exportBackup() {
+  const [inventory, requests, journal, acts] = await Promise.all([
+    dbGetAll('inventory'), dbGetAll('requests'), dbGetAll('journal'), dbGetAll('acts')
+  ]);
+  const data = {version:2, exportedAt: now(), inventory, requests, journal, acts};
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `avronis_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  showNotif('Резервну копію збережено ✅');
+}
 
-// ===================== БІРКИ =====================
-let tagData = [null, null, null, null];
-
-let tagMode = 'act'; // 'act' або 'req'
-
-function setTagMode(mode) {
-  tagMode = mode;
-  const panelAct = document.getElementById('tag-panel-act');
-  const panelReq = document.getElementById('tag-panel-req');
-  const btnAct = document.getElementById('tag-mode-act');
-  const btnReq = document.getElementById('tag-mode-req');
-  if (panelAct) panelAct.style.display = mode === 'act' ? '' : 'none';
-  if (panelReq) panelReq.style.display = mode === 'req' ? '' : 'none';
-  if (btnAct) btnAct.className = mode === 'act' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
-  if (btnReq) btnReq.className = mode === 'req' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
-  // Скидаємо дані попереднього режиму
-  tagData = [null,null,null,null];
-  tagJournalItems = [];
-  if (mode === 'req') {
-    setTimeout(() => loadTagReqList(), 0);
-  } else {
-    renderTagsPreview();
+async function importBackup(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const text = await file.text();
+  let data;
+  try { data = JSON.parse(text); } catch(e) { showNotif('Невірний файл','err'); return; }
+  if (!confirm(`Відновити з резервної копії від ${data.exportedAt||'?'}?\nВсі поточні дані будуть замінені.`)) return;
+  if (!db) {
+    try { await initDB(); } catch(e) { showNotif('Помилка бази даних','err'); return; }
   }
-}
-
-async function loadTagReqList() {
-  const sel = document.getElementById('tag-req-select');
-  if (!sel) return;
-  sel.innerHTML = '<option value="">⏳ Завантаження...</option>';
-
-  // Читаємо журнал частинами — тільки унікальні reqNum
-  const journal = await dbGetAll('journal');
-
-  // Групуємо по reqNum швидко
-  const grouped = Object.create(null);
-  for (const j of journal) {
-    if (!j.reqNum) continue;
-    if (!grouped[j.reqNum]) grouped[j.reqNum] = {first: j, count: 0};
-    grouped[j.reqNum].count++;
+  for (const store of ['inventory','requests','journal','acts']) {
+    try {
+      await dbClear(store);
+      for (const item of (data[store]||[])) {
+        const clean = Object.assign({}, item);
+        delete clean.id;
+        await dbAdd(store, clean);
+      }
+    } catch(e) { console.warn('store error:', store, e); }
   }
-
-  const keys = Object.keys(grouped).sort((a,b) => b.localeCompare(a)).slice(0, 300);
-
-  sel.innerHTML = '<option value="">— Оберіть заявку —</option>';
-  const frag = document.createDocumentFragment();
-  for (const reqNum of keys) {
-    const {first, count} = grouped[reqNum];
-    const opt = document.createElement('option');
-    opt.value = reqNum;
-    opt.textContent = reqNum + ' — ' + (first.aggregate||'—') + ' (' + count + ' поз.) · ' + (first.date||'').slice(0,10);
-    frag.appendChild(opt);
-  }
-  sel.appendChild(frag);
+  showNotif('Дані відновлено з резервної копії ✅');
+  setTimeout(() => { loadDashboard(); renderBackupStats(); }, 300);
+  input.value = '';
 }
 
-// Зберігаємо всі позиції поточної заявки для посторінкового друку
-let tagJournalItems = [];
-
-function updateTagDates(date) {
-  if (!date) return;
-  tagJournalItems.forEach(j => j._overrideDate = date);
-  tagData.forEach(t => { if(t) t.date = date; });
-  renderTagsPreview();
+async function renderBackupStats() {
+  const [inv, reqs, journal, acts] = await Promise.all([
+    dbGetAll('inventory'), dbGetAll('requests'), dbGetAll('journal'), dbGetAll('acts')
+  ]);
+  document.getElementById('db-stats').innerHTML = `
+    📦 Інвентар: <strong>${inv.length} позицій</strong><br>
+    📋 Заявки: <strong>${reqs.length}</strong> (активних: ${reqs.filter(r=>r.status!=='done').length})<br>
+    🔄 Журнал видач: <strong>${journal.length} записів</strong><br>
+    📝 Акти ВК: <strong>${acts.length}</strong>`;
 }
 
-async function onTagReqSelect(reqNum) {
-  tagJournalItems = [];
-  tagData = [null,null,null,null];
-  const info = document.getElementById('tag-req-info');
-  const dateRow = document.getElementById('tag-req-date-row');
-
-  if (!reqNum) {
-    renderTagsPreview();
-    info.innerHTML = '';
-    if(dateRow) dateRow.style.display = 'none';
-    return;
-  }
-
-  const journal = await dbGetAll('journal');
-  const items = journal.filter(j => j.reqNum === reqNum);
-  if (!items.length) return;
-
-  tagJournalItems = items;
-
-  // Показуємо перші 4
-  tagData = [null,null,null,null];
-  items.slice(0,4).forEach((j, i) => {
-    tagData[i] = {
-      name: j.name || '',
-      pn: j.pn || '—',
-      sn: j.sn || '—',
-      qty: String(j.qty || '').trim() + (j.unit && !String(j.qty||'').includes(j.unit) ? ' ' + j.unit : ''),
-      act: j.sourceActNum || '',
-      supplier: j.sourceSupplier || '',
-      until: '',
-      inspector: j.executor || j.storekeeper || '',
-      date: (j.date || '').slice(0,10)
-    };
-  });
-
-  // Показуємо поле дати
-  if(dateRow) {
-    dateRow.style.display = 'flex';
-    const journalDate = (items[0]?.date || '').slice(0,10);
-    const dateInput = document.getElementById('tag-req-date');
-    if(dateInput) dateInput.value = journalDate;
-  }
-
-  if (items.length > 4) {
-    info.innerHTML = '⚠️ ' + items.length + ' позицій — при друці буде ' + Math.ceil(items.length/4) + ' аркушів по 4';
-  } else {
-    info.innerHTML = '✅ ' + items.length + ' позицій';
-  }
-  renderTagsPreview();
-}
-
-async function renderTags() {
-  const acts = await dbGetAll('acts');
-  const selects = document.querySelectorAll('.tag-act-select');
-  selects.forEach(sel => {
-    const cur = sel.value;
-    sel.innerHTML = '<option value="">— Оберіть акт —</option>';
-    [...acts]
-      .sort((a,b) => (b.actNum||'').localeCompare(a.actNum||''))
-      .forEach(a => {
-        const opt = document.createElement('option');
-        opt.value = a.actNum;
-        opt.textContent = a.actNum + (a.name ? ' — ' + a.name.slice(0,30) : '');
-        if (a.actNum === cur) opt.selected = true;
-        sel.appendChild(opt);
-      });
-  });
-  renderTagsPreview();
-}
-
-async function onTagActSelect(idx, actNum) {
-  if (!actNum) { tagData[idx] = null; renderTagsPreview(); return; }
-  const acts = await dbGetAll('acts');
-  const act = acts.find(a => a.actNum === actNum);
-  if (!act) return;
-  tagData[idx] = {
-    name: act.name || '',
-    pn: act.pn || '—',
-    sn: act.sn || '—',
-    qty: String(act.qty || '').trim() + (act.unit && !String(act.qty||'').includes(act.unit) ? ' ' + act.unit : ''),
-    act: act.actNum || '',
-    supplier: act.supplier || '',
-    until: '',
-    inspector: act.inspector || '',
-    date: (act.date || '').slice(0, 10)
-  };
-  renderTagsPreview();
-}
-
-function renderTagsPreview() {
-  const container = document.getElementById('tags-preview');
-  if (!container) return;
-  const active = tagData.filter(Boolean);
-  if (!active.length) {
-    container.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text2);padding:40px">Оберіть акти ВК щоб побачити бірки</div>';
-    return;
-  }
-  container.innerHTML = tagData.map((t, i) => t ? renderTagCard(t, i) : '').join('');
-}
-
-function renderTagCard(t, idx) {
-  return `<div class="tag-card">
-    <div class="tag-header">
-      <div class="tag-header-cell">«AVRONIS FZE»</div>
-      <div class="tag-header-cell">
-        «SERVICEABLE/FIT FOR USE»<br>
-        <span style="font-weight:400;font-style:italic;font-size:11px">(«СПРАВНИЙ/ПРИДАТНИЙ»)</span>
-      </div>
-      <div class="tag-header-cell green">
-        <div>GREEN</div>
-        <div class="green-label">(зелений)</div>
-      </div>
-    </div>
-    <div class="tag-row">
-      <div class="tag-label"><b>Item Name</b><span>(Найменування)</span></div>
-      <div class="tag-value">${t.name}</div>
-    </div>
-    <div class="tag-row">
-      <div class="tag-label"><b>Part Number</b><span>(Номенклатура)</span></div>
-      <div class="tag-value">${t.pn}</div>
-    </div>
-    <div class="tag-row">
-      <div class="tag-label"><b>Serial Number</b><span>(Заводський №)</span></div>
-      <div class="tag-value">${t.sn}</div>
-    </div>
-    <div class="tag-row">
-      <div class="tag-label"><b>Quantity</b><span>(Кількість)</span></div>
-      <div class="tag-value">${t.qty}</div>
-    </div>
-    <div class="tag-row">
-      <div class="tag-label"><b>Acceptance Certificate/<br>Reference</b><span>(Акт ВК/Підстава)</span></div>
-      <div class="tag-value">${t.act}</div>
-    </div>
-    <div class="tag-row">
-      <div class="tag-label"><b>Supplier/Customer</b><span>(Постачальник/Замовник)</span></div>
-      <div class="tag-value">${t.supplier}</div>
-    </div>
-    <div class="tag-row">
-      <div class="tag-label"><b>Serviceable Until:</b><span>(Придатний до)</span></div>
-      <div class="tag-value">${t.until || ''}</div>
-    </div>
-    <div class="tag-row">
-      <div class="tag-label"><b>Name/Signature</b><span>(Прізвище/підпис)</span></div>
-      <div class="tag-value">${t.inspector}</div>
-    </div>
-    <div class="tag-row">
-      <div class="tag-label"><b>Date</b><span>(Дата)</span></div>
-      <div class="tag-value">${t.date}</div>
-    </div>
-    <div class="tag-footer">
-      AMO-CiV-F.0018 <b>Additional information on reverse side:</b>
-      <span>(Додаткова штформація на звороті)</span>
-      <button class="btn btn-ghost btn-sm no-print" style="margin-left:12px;font-size:11px" onclick="openTagEdit(${idx})">✏️ Редагувати</button>
-    </div>
-  </div>`;
-}
-
-function openTagEdit(idx) {
-  const t = tagData[idx];
-  if (!t) return;
-  document.getElementById('tag-edit-idx').value = idx;
-  document.getElementById('tag-edit-name').value = t.name;
-  document.getElementById('tag-edit-pn').value = t.pn;
-  document.getElementById('tag-edit-sn').value = t.sn;
-  document.getElementById('tag-edit-qty').value = t.qty;
-  document.getElementById('tag-edit-act').value = t.act;
-  document.getElementById('tag-edit-supplier').value = t.supplier;
-  document.getElementById('tag-edit-until').value = t.until || '';
-  document.getElementById('tag-edit-inspector').value = t.inspector;
-  document.getElementById('tag-edit-date').value = t.date;
-  openModal('modal-tag-edit');
-}
-
-function saveTagEdit() {
-  const idx = parseInt(document.getElementById('tag-edit-idx').value);
-  if (isNaN(idx) || !tagData[idx]) return;
-  tagData[idx] = {
-    name: document.getElementById('tag-edit-name').value,
-    pn: document.getElementById('tag-edit-pn').value,
-    sn: document.getElementById('tag-edit-sn').value,
-    qty: document.getElementById('tag-edit-qty').value,
-    act: document.getElementById('tag-edit-act').value,
-    supplier: document.getElementById('tag-edit-supplier').value,
-    until: document.getElementById('tag-edit-until').value,
-    inspector: document.getElementById('tag-edit-inspector').value,
-    date: document.getElementById('tag-edit-date').value,
-  };
-  closeModal('modal-tag-edit');
-  renderTagsPreview();
-}
-
-function printTags() {
-  let allItems = [];
-  if (tagMode === 'req' && tagJournalItems.length > 0) {
-    const overrideDate = document.getElementById('tag-req-date')?.value || '';
-    allItems = tagJournalItems.map(j => ({
-      name: j.name || '',
-      pn: j.pn || '—',
-      sn: j.sn || '—',
-      qty: String(j.qty || '').trim() + (j.unit && !String(j.qty||'').includes(j.unit) ? ' ' + j.unit : ''),
-      act: j.sourceActNum || '',
-      supplier: j.sourceSupplier || '',
-      until: '',
-      inspector: j.executor || j.storekeeper || '',
-      date: overrideDate || (j.date || '').slice(0,10)
-    }));
-  } else {
-    allItems = tagData.filter(Boolean);
-  }
-  if (!allItems.length) { showNotif('Оберіть хоча б одну позицію', 'err'); return; }
-
-  // Розбиваємо на групи по 4
-  const pages = [];
-  for (let i = 0; i < allItems.length; i += 4) pages.push(allItems.slice(i, i + 4));
-
-  // Генеруємо HTML для однієї бірки
-  function tagCardHtml(t) {
-    return '<div class="tag-card">' +
-      '<div class="tag-header">' +
-        '<div class="tag-header-cell">\xABAVRONIS FZE\xBB</div>' +
-        '<div class="tag-header-cell">\xABSERVICEABLE/FIT FOR USE\xBB<br><span style="font-weight:400;font-style:italic;font-size:8px">(\xAB\u0421\u041F\u0420\u0410\u0412\u041D\u0418\u0419/\u041F\u0420\u0418\u0414\u0410\u0422\u041D\u0418\u0419\xBB)</span></div>' +
-        '<div class="tag-header-cell green"><div>GREEN</div><div class="green-label">(\u0437\u0435\u043B\u0435\u043D\u0438\u0439)</div></div>' +
-      '</div>' +
-      '<div class="tag-row"><div class="tag-label"><b>Item Name</b><span>(\u041D\u0430\u0439\u043C\u0435\u043D\u0443\u0432\u0430\u043D\u043D\u044F)</span></div><div class="tag-value">' + (t.name||'') + '</div></div>' +
-      '<div class="tag-row"><div class="tag-label"><b>Part Number</b><span>(\u041D\u043E\u043C\u0435\u043D\u043A\u043B\u0430\u0442\u0443\u0440\u0430)</span></div><div class="tag-value">' + (t.pn||'') + '</div></div>' +
-      '<div class="tag-row"><div class="tag-label"><b>Serial Number</b><span>(\u0417\u0430\u0432\u043E\u0434\u0441\u044C\u043A\u0438\u0439 \u2116)</span></div><div class="tag-value">' + (t.sn||'') + '</div></div>' +
-      '<div class="tag-row"><div class="tag-label"><b>Quantity</b><span>(\u041A\u0456\u043B\u044C\u043A\u0456\u0441\u0442\u044C)</span></div><div class="tag-value">' + (t.qty||'') + '</div></div>' +
-      '<div class="tag-row"><div class="tag-label"><b>Acceptance Certificate/<br>Reference</b><span>(\u0410\u043A\u0442 \u0412\u041A/\u041F\u0456\u0434\u0441\u0442\u0430\u0432\u0430)</span></div><div class="tag-value">' + (t.act||'') + '</div></div>' +
-      '<div class="tag-row"><div class="tag-label"><b>Supplier/Customer</b><span>(\u041F\u043E\u0441\u0442\u0430\u0447\u0430\u043B\u044C\u043D\u0438\u043A/\u0417\u0430\u043C\u043E\u0432\u043D\u0438\u043A)</span></div><div class="tag-value">' + (t.supplier||'') + '</div></div>' +
-      '<div class="tag-row"><div class="tag-label"><b>Serviceable Until:</b><span>(\u041F\u0440\u0438\u0434\u0430\u0442\u043D\u0438\u0439 \u0434\u043E)</span></div><div class="tag-value">' + (t.until||'') + '</div></div>' +
-      '<div class="tag-row"><div class="tag-label"><b>Name/Signature</b><span>(\u041F\u0440\u0456\u0437\u0432\u0438\u0449\u0435/\u043F\u0456\u0434\u043F\u0438\u0441)</span></div><div class="tag-value">' + (t.inspector||'') + '</div></div>' +
-      '<div class="tag-row"><div class="tag-label"><b>Date</b><span>(\u0414\u0430\u0442\u0430)</span></div><div class="tag-value">' + (t.date||'') + '</div></div>' +
-      '<div class="tag-footer">AMO-CiV-F.0018 <b>Additional information on reverse side:</b> <span>(\u0414\u043E\u0434\u0430\u0442\u043A\u043E\u0432\u0430 \u0448\u0442\u0444\u043E\u0440\u043C\u0430\u0446\u0456\u044F \u043D\u0430 \u0437\u0432\u043E\u0440\u043E\u0442\u0456)</span></div>' +
-    '</div>';
-  }
-
-  function backCardHtml() {
-    return '<div class="tag-card" style="display:flex;flex-direction:column;">' +
-      '<div class="tag-header">' +
-        '<div class="tag-header-cell">\xABAVRONIS FZE\xBB</div>' +
-        '<div class="tag-header-cell">\xABSERVICEABLE/FIT FOR USE\xBB<br><span style="font-weight:400;font-style:italic;font-size:8px">(\xAB\u0421\u041F\u0420\u0410\u0412\u041D\u0418\u0419/\u041F\u0420\u0418\u0414\u0410\u0422\u041D\u0418\u0419\xBB)</span></div>' +
-        '<div class="tag-header-cell green"><div>GREEN</div><div class="green-label">(\u0437\u0435\u043B\u0435\u043D\u0438\u0439)</div></div>' +
-      '</div>' +
-      '<div style="flex:1;padding:6px 8px;display:flex;flex-direction:column;">' +
-        '<div style="font-size:9px;font-weight:700;margin-bottom:4px">Additional information:<br><span style="font-weight:400;font-style:italic">(\u0414\u043E\u0434\u0430\u0442\u043A\u043E\u0432\u0430 \u0456\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0456\u044F)</span></div>' +
-        '<div style="flex:1;border:1px solid #000;margin-top:4px;min-height:160px"></div>' +
-      '</div>' +
-    '</div>';
-  }
-
-  const css = [
-    '* { box-sizing: border-box; margin: 0; padding: 0; }',
-    '@page { size: A4 landscape; margin: 8mm; }',
-    'body { font-family: Arial, sans-serif; background: #fff; color: #000; }',
-    '.tags-grid { display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); gap: 6mm; width: 100%; height: calc(100vh - 16mm); }',
-    '.page-break { page-break-after: always; }',
-    '.tag-card { border: 2px solid #000; background: #fff; display: flex; flex-direction: column; }',
-    '.tag-header { display: grid; grid-template-columns: 1fr 2fr 55px; border-bottom: 2px solid #000; }',
-    '.tag-header-cell { padding: 5px 6px; display: flex; align-items: center; justify-content: center; text-align: center; font-weight: 700; font-size: 10px; line-height: 1.3; }',
-    '.tag-header-cell:not(:last-child) { border-right: 2px solid #000; }',
-    '.tag-header-cell.green { background: #4CAF50 !important; color: #fff; flex-direction: column; -webkit-print-color-adjust: exact; print-color-adjust: exact; }',
-    '.green-label { font-size: 8px; font-weight: 400; font-style: italic; }',
-    '.tag-row { display: grid; grid-template-columns: 120px 1fr; border-bottom: 1px solid #000; min-height: 22px; }',
-    '.tag-label { padding: 2px 5px; border-right: 2px solid #000; font-size: 8px; font-weight: 700; line-height: 1.3; display: flex; flex-direction: column; justify-content: center; }',
-    '.tag-label span { font-weight: 400; font-style: italic; }',
-    '.tag-value { padding: 2px 5px; font-size: 9px; display: flex; align-items: center; }',
-    '.tag-footer { padding: 3px 5px; font-size: 7.5px; font-weight: 700; border-top: 2px solid #000; }',
-    '.tag-footer span { font-weight: 400; font-style: italic; }'
-  ].join('\n');
-
-  // Будуємо HTML без template literals
-  let html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Birky AMO-CiV-F.0018</title><style>' + css + '</style></head><body>';
-
-  // Лицева сторона
-  pages.forEach(function(page) {
-    html += '<div class="tags-grid">';
-    page.forEach(function(t) { html += tagCardHtml(t); });
-    html += '</div><div class="page-break"></div>';
-  });
-
-  // Зворотня сторона
-  pages.forEach(function(page) {
-    html += '<div class="tags-grid">';
-    page.forEach(function() { html += backCardHtml(); });
-    html += '</div><div class="page-break"></div>';
-  });
-
-  html += '<script>window.onload=function(){window.print();}<' + '/script></body></html>';
-
-  const win = window.open('', '_blank', 'width=1100,height=800');
-  win.document.write(html);
-  win.document.close();
-}
-
+// ===================== HANDLE HASH =====================
 function checkHash() {
   const isMobile = window.location.hash === '#mobile-request' ||
                    new URLSearchParams(window.location.search).get('mode') === 'mobile';
@@ -5039,11 +4408,10 @@ async function renderMeasuring() {
   let filtered = allMeas.map(m => {
     let statusClass = 'badge-grey';
     let statusLabel = m.status || '—';
-    const nextCalClean = (m.nextCal||'').slice(0,10);
-    if (!nextCalClean) {
+    if (!m.nextCal) {
       statusClass = 'badge-warn'; statusLabel = '⏳ Очікує повірки';
     } else {
-      const next = new Date(nextCalClean + 'T12:00:00');
+      const next = new Date(m.nextCal);
       if (next < today) { statusClass = 'badge-danger'; statusLabel = '❌ Прострочено'; }
       else if (next < soon) { statusClass = 'badge-warn'; statusLabel = '⚠️ Скоро'; }
       else { statusClass = 'badge-ok'; statusLabel = '✅ Придатний'; }
@@ -5079,8 +4447,8 @@ async function renderMeasuring() {
     <td style="font-size:12px">${m.range||'—'}</td>
     <td style="font-size:11px;color:var(--text2)">${m.location||'—'}</td>
     <td style="font-size:11px;color:var(--text2)">${m.storagePlace||'—'}</td>
-    <td style="font-size:12px">${(m.lastCal||'').slice(0,10)||'—'}</td>
-    <td style="font-size:12px;font-weight:${m.statusClass==='badge-danger'?'700':'400'};color:${m.statusClass==='badge-danger'?'var(--red)':m.statusClass==='badge-warn'?'var(--orange)':'inherit'}">${(m.nextCal||'').slice(0,10)||'—'}</td>
+    <td style="font-size:12px">${m.lastCal||'—'}</td>
+    <td style="font-size:12px;font-weight:${m.statusClass==='badge-danger'?'700':'400'};color:${m.statusClass==='badge-danger'?'var(--red)':m.statusClass==='badge-warn'?'var(--orange)':'inherit'}">${m.nextCal||'—'}</td>
     <td><span class="badge ${m.statusClass}">${m.statusLabel}</span></td>
     <td><button class="btn btn-ghost btn-icon btn-sm" onclick="openMeasEdit('${(m.sn||'').replace(/'/g,'')}')" title="Редагувати">✏️</button></td>
   </tr>`).join('');
@@ -5098,8 +4466,8 @@ async function openMeasEdit(sn) {
   // Editable fields
   document.getElementById('meas-edit-location').value = m.location || '';
   document.getElementById('meas-edit-storage-place').value = m.storagePlace || '';
-  document.getElementById('meas-edit-last-cal').value = (m.lastCal||'').slice(0,10) || '';
-  document.getElementById('meas-edit-next-cal').value = (m.nextCal||'').slice(0,10) || '';
+  document.getElementById('meas-edit-last-cal').value = m.lastCal || '';
+  document.getElementById('meas-edit-next-cal').value = m.nextCal || '';
   openModal('modal-meas-edit');
 }
 
@@ -5142,12 +4510,14 @@ async function startApp() {
   checkHash();
   if (window.location.hash !== '#mobile-request' && new URLSearchParams(window.location.search).get('mode') !== 'mobile') {
     await preloadDataIfEmpty();
-    // Автовиправлення ISO дат при кожному старті
+    // Автовиправлення ISO дат при старті
     await (async()=>{
       try {
         const acts = await dbGetAll('acts');
-        const needFix = acts.filter(a=>a.date&&a.date.length>10);
-        for(const a of needFix){ a.date=a.date.slice(0,10); await dbPut('acts',a); }
+        for(const a of acts.filter(a=>a.date&&a.date.length>10)){
+          a.date=a.date.slice(0,10);
+          await dbPut('acts',a);
+        }
         const meas = await dbGetAll('meas_edits');
         for(const m of meas){
           let ch=false;
@@ -5159,9 +4529,16 @@ async function startApp() {
     })();
     loadDashboard();
     updateQuarantineBadge();
-    // Автобекап тільки запис → ніякого автоматичного читання з Sheets
+    // При старті — підтягуємо дані з Sheets якщо є новіші (синхронізація між користувачами)
+    
+
+    // Автобекап: через 10 сек після старту і кожні 2 хвилини
     setTimeout(() => autoBackupToSheets(), 10000);
     setInterval(() => autoBackupToSheets(), 2 * 60 * 1000);
+
+    // Підтягуємо зміни від іншого користувача кожні 30 секунд
+
+    
   }
 }
 startApp();
@@ -5378,6 +4755,8 @@ function showSyncStatus(status) {
 async function manualSync() {
   const btn = document.getElementById('sync-now-btn');
   if (btn) btn.textContent = '⏳';
+  showSyncStatus('syncing');
+  await pullFromSheets();
   await autoBackupToSheets();
   if (btn) btn.textContent = '🔄';
   showNotif('✅ Синхронізовано з хмарою');
@@ -5397,7 +4776,6 @@ async function pullFromSheets() {
 
     // Якщо Sheets новіший — підтягуємо
     if (sheetsAt > localSyncAt && data.inventory?.length) {
-      const fixDate = d => (d && String(d).length > 10) ? String(d).slice(0,10) : (d||'');
       const restoreStore = async (storeName, items) => {
         if (!items?.length) return;
         // Захист: не перезаписуємо якщо прийшов порожній масив
@@ -5405,14 +4783,7 @@ async function pullFromSheets() {
         const tx = db.transaction(storeName,'readwrite');
         const s = tx.objectStore(storeName);
         s.clear();
-        items.forEach(item => {
-          const c={...item}; delete c.id;
-          if(c.date) c.date=fixDate(c.date);
-          if(c.actDate) c.actDate=fixDate(c.actDate);
-          if(c.lastCal) c.lastCal=fixDate(c.lastCal);
-          if(c.nextCal) c.nextCal=fixDate(c.nextCal);
-          s.add(c);
-        });
+        items.forEach(item => { const c={...item}; delete c.id; s.add(c); });
         await new Promise(r=>tx.oncomplete=r);
       };
 
@@ -5450,20 +4821,12 @@ async function restoreFromSheets() {
     const resp = await fetch(GAS_URL + '?action=getBackup');
     const data = await resp.json();
 
-    const fixDate2 = d => (d && String(d).length > 10) ? String(d).slice(0,10) : (d||'');
     const restoreStore = async (storeName, items) => {
       if (!items?.length) return 0;
       const tx = db.transaction(storeName,'readwrite');
       const s = tx.objectStore(storeName);
       s.clear();
-      items.forEach(item => {
-        const c={...item}; delete c.id;
-        if(c.date) c.date=fixDate2(c.date);
-        if(c.actDate) c.actDate=fixDate2(c.actDate);
-        if(c.lastCal) c.lastCal=fixDate2(c.lastCal);
-        if(c.nextCal) c.nextCal=fixDate2(c.nextCal);
-        s.add(c);
-      });
+      items.forEach(item => { const c={...item}; delete c.id; s.add(c); });
       await new Promise(r=>tx.oncomplete=r);
       return items.length;
     };
