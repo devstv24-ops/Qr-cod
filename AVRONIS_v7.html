@@ -354,9 +354,25 @@ select option { background: var(--surface2); }
 .act-preview { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
 .act-preview table { font-size: 12px; }
 .act-preview th, .act-preview td { border: 1px solid var(--border); padding: 6px 8px; }
+
+/* RECOVERY MODE SAFETY PATCH — see comment near top of the main inline script block for full context */
+#recovery-mode-banner {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 99998;
+  background: #f39c12; color: #1a1200; font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; font-weight: 700; text-align: center; padding: 6px 10px;
+  letter-spacing: .3px;
+}
+#sidebar { top: 28px !important; }
+#main { margin-top: 28px; }
 </style>
 </head>
 <body>
+
+<!-- RECOVERY MODE SAFETY PATCH: persistent banner marking this as the protected build.
+     Remove this div (and the #recovery-mode-banner / #sidebar top / #main margin-top
+     rules above) together with the RECOVERY_MODE flag in the script below to return
+     to normal operation. -->
+<div id="recovery-mode-banner">🛠️ RECOVERY / MAINTENANCE MODE — automatic DB reset, auto-backup, and destructive sync are disabled. No data has been changed by this patch.</div>
 
 <!-- SIDEBAR -->
 <div id="sidebar">
@@ -364,7 +380,7 @@ select option { background: var(--surface2); }
     <div class="logo-mark">✈️</div>
     <div class="logo-info">
       <div class="logo-name">AVRONIS</div>
-      <div class="logo-ver">WMS · MRO v2.0</div>
+      <div class="logo-ver">WMS · MRO v2.0 · RECOVERY MODE</div>
     </div>
   </div>
   <nav>
@@ -1448,6 +1464,33 @@ select option { background: var(--surface2); }
 </div>
 
 <script>
+// ===================== RECOVERY / MAINTENANCE MODE SAFETY PATCH =====================
+// Applied while a confirmed data-loss investigation is open. This flag disables the
+// specific mechanisms identified as capable of silently deleting, resetting, or
+// overwriting stored data. It changes NO stored data by itself — inventory, journal,
+// requests, acts, and the Google Sheets backend are untouched by this patch.
+//
+// To return to normal operation once the recovery is complete and reviewed, set this
+// back to false (and remove the #recovery-mode-banner block in <body> / <style> if
+// you also want the visible banner gone).
+const RECOVERY_MODE = true;
+
+function recoveryModeBlock() {
+  alert('Recovery mode: destructive synchronization is temporarily disabled.');
+}
+
+function showRecoveryModeBlockingError(e) {
+  const detail = (e && e.message) ? e.message : String(e);
+  console.error('[RECOVERY MODE] Database failed to open — stopping without touching any data.', e);
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:#1a0000;color:#ffdddd;z-index:999999;'
+    + 'display:flex;align-items:center;justify-content:center;padding:40px;'
+    + 'font-family:monospace;font-size:16px;white-space:pre-wrap;text-align:center;line-height:1.6';
+  overlay.textContent = '⛔ Database failed to open.\n\n' + detail
+    + '\n\nRECOVERY MODE: automatic database reset has been disabled — no data has been touched.'
+    + '\nDo not close this tab. Contact the system administrator before taking any further action.';
+  document.body.appendChild(overlay);
+}
 // ===================== GOOGLE SHEETS SYNC =====================
 const GAS_URL = 'https://script.google.com/macros/s/AKfycby8HCH35aYRdDpK6nT2uOLry7Yof_-RWk8p0OUlpfJHfN4qQ6VKQSpfgm96GrB7k-0ZVQ/exec';
 
@@ -2009,6 +2052,7 @@ function initDB() {
 const BACKUP_STORES = new Set(['inventory','journal','acts','requests','tools_edits','meas_edits']);
 let _backupTimer = null;
 function scheduleBackup() {
+  if (RECOVERY_MODE) return; // SAFETY PATCH: write-triggered auto-backup disabled in recovery mode
   if (_backupTimer) clearTimeout(_backupTimer);
   _backupTimer = setTimeout(() => { autoBackupToSheets(); _backupTimer = null; }, 3000);
 }
@@ -4185,6 +4229,7 @@ async function exportBackup() {
 }
 
 async function importBackup(input) {
+  if (RECOVERY_MODE) { recoveryModeBlock(); input.value = ''; return; }
   const file = input.files[0];
   if (!file) return;
   const text = await file.text();
@@ -4501,16 +4546,24 @@ async function exportMeasuringCSV() {
 
 
 async function startApp() {
-  try { await initDB(); } catch(e) {
-    try {
-      await new Promise((res,rej) => { const del = indexedDB.deleteDatabase(DB_NAME); del.onsuccess=res; del.onerror=rej; del.onblocked=res; });
-      await initDB();
-    } catch(e2) { showNotif('Помилка бази: '+(e2&&e2.message?e2.message:String(e2)),'err'); return; }
+  try {
+    await initDB();
+  } catch(e) {
+    // SAFETY PATCH: this used to call indexedDB.deleteDatabase(DB_NAME) here and
+    // silently wipe every store on any transient open failure — the confirmed root
+    // cause of the inventory/journal/requests loss incident. That call has been
+    // removed. We now stop, show a blocking error, and touch nothing.
+    showRecoveryModeBlockingError(e);
+    return;
   }
   checkHash();
   if (window.location.hash !== '#mobile-request' && new URLSearchParams(window.location.search).get('mode') !== 'mobile') {
-    await preloadDataIfEmpty();
-    // Автовиправлення ISO дат при старті
+    // SAFETY PATCH: silent preload-if-empty is disabled in recovery mode — it must
+    // never auto-insert the hardcoded 93 inventory / 311 acts while a real recovery
+    // is pending review.
+    if (!RECOVERY_MODE) await preloadDataIfEmpty();
+    // Автовиправлення ISO дат при старті (unchanged — only rewrites fields already
+    // present in existing records, never adds/removes/clears anything)
     await (async()=>{
       try {
         const acts = await dbGetAll('acts');
@@ -4529,16 +4582,15 @@ async function startApp() {
     })();
     loadDashboard();
     updateQuarantineBadge();
-    // При старті — підтягуємо дані з Sheets якщо є новіші (синхронізація між користувачами)
-    
 
-    // Автобекап: через 10 сек після старту і кожні 2 хвилини
-    setTimeout(() => autoBackupToSheets(), 10000);
-    setInterval(() => autoBackupToSheets(), 2 * 60 * 1000);
-
-    // Підтягуємо зміни від іншого користувача кожні 30 секунд
-
-    
+    // SAFETY PATCH: automatic cloud backup (10s after load, then every 2 minutes)
+    // is disabled in recovery mode.
+    if (!RECOVERY_MODE) {
+      setTimeout(() => autoBackupToSheets(), 10000);
+      setInterval(() => autoBackupToSheets(), 2 * 60 * 1000);
+    } else {
+      console.warn('[RECOVERY MODE] Automatic cloud backup (10s timeout + 2min interval) is disabled.');
+    }
   }
 }
 startApp();
@@ -4565,6 +4617,9 @@ async function preloadDataIfEmpty() {
 }
 
 async function reloadActsFromPreloaded() {
+  // SAFETY PATCH ADDITION (not explicitly requested, added for consistency — see report):
+  // this button does the same unguarded clear+reseed pattern implicated in the acts loss.
+  if (RECOVERY_MODE) { recoveryModeBlock(); return; }
   if (!confirm(`Перезавантажити реєстр актів з файлу?\nПоточні дані актів будуть замінені на ${PRELOADED_ACTS.length} позицій з файлу.\nЗаявки та склад залишаться без змін.`)) return;
   await dbClear('acts');
   for (const a of PRELOADED_ACTS) {
@@ -4753,6 +4808,7 @@ function showSyncStatus(status) {
 
 // Підтягуємо дані з Sheets якщо вони новіші (для синхронізації між користувачами)
 async function manualSync() {
+  if (RECOVERY_MODE) { recoveryModeBlock(); return; }
   const btn = document.getElementById('sync-now-btn');
   if (btn) btn.textContent = '⏳';
   showSyncStatus('syncing');
@@ -4763,6 +4819,7 @@ async function manualSync() {
 }
 
 async function pullFromSheets() {
+  if (RECOVERY_MODE) { recoveryModeBlock(); return; }
   if (_syncInProgress) return;
   _syncInProgress = true;
   try {
@@ -4816,6 +4873,7 @@ async function pullFromSheets() {
 }
 
 async function restoreFromSheets() {
+  if (RECOVERY_MODE) { recoveryModeBlock(); return; }
   try {
     showNotif('⏳ Завантаження бекапу з Google Sheets...');
     const resp = await fetch(GAS_URL + '?action=getBackup');
